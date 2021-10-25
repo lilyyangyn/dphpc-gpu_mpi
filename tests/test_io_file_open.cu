@@ -17,7 +17,7 @@ struct FileOpenTest {
     }
 };
 
-TEST_CASE("empty test", "[empty_test]"]) {
+TEST_CASE("empty test", "[empty_test]") {
     TestRunner testRunner(1);
     testRunner.run<FileOpenTest>();
 }
