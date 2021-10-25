@@ -2,6 +2,8 @@
 
 #include "mpi.h.cuh"
 
+using namespace gpu_mpi;
+
 struct FileOpenTest {
     static __device__ void run(bool& ok) {
         MPI_Init(nullptr, nullptr);
