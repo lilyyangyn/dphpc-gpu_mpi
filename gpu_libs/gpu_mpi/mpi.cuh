@@ -14,6 +14,7 @@
 #include "communicator.cuh"
 #include "datatypes.cuh"
 #include "operators.cuh"
+#include "io.cuh"
 
 struct MPI_Status {
     int MPI_SOURCE = MPI_ANY_SOURCE;
