@@ -8,8 +8,8 @@ struct FileOpenTest {
     static __device__ void run(bool& ok) {
         MPI_Init(nullptr, nullptr);
 
-        MPI_Info info;
-        MPI_File fh;
+        MPI_Info info{};
+        MPI_File fh{};
         int err = MPI_FILE_OPEN(MPI_COMM_WORLD, nullptr, 0, info, &fh);
         ok = err == 0;
 
