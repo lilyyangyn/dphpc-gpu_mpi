@@ -4,6 +4,9 @@
 
 using namespace gpu_mpi;
 
+struct MPI_Info;
+struct MPI_File;
+
 struct FileOpenTest {
     static __device__ void run(bool& ok) {
         MPI_Init(nullptr, nullptr);
