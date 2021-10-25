@@ -5,6 +5,9 @@
 
 namespace gpu_mpi {
 
+    struct MPI_Info;
+    struct MPI_File;
+
     __device__ int MPI_FILE_OPEN(MPI_Comm comm, const char *filename, int amode, MPI_Info info, MPI_File *fh);
 
 }
