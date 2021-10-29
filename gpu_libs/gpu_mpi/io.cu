@@ -15,17 +15,17 @@ namespace gpu_mpi {
             cnt++;
         }
         if(cnt != 1){
-            // see documentation p647 line 13
+            // see documentation p495 line 7
             return MPI_ERR_AMODE;
         }
 
         if(((amode & MPI_MODE_CREATE) || (amode & MPI_MODE_EXCL)) && (amode & MPI_MODE_RDONLY)){
-            // see documentation p647 line 14
+            // see documentation p495 line 8
             return MPI_ERR_AMODE;
         }
 
         if((amode & MPI_MODE_RDWR) && (amode & MPI_MODE_SEQUENTIAL)){
-            // see documentation p647 line 15
+            // see documentation p495 line 9
             return MPI_ERR_AMODE;
         }
         

@@ -3,11 +3,11 @@
 
 #include "mpi.cuh"
 
-// See documentation: https://www.mpi-forum.org/docs/mpi-4.0/mpi40-report.pdf
+// See documentation: https://www.mpi-forum.org/docs/mpi-3.1/mpi31-report.pdf
 
 /**
  * amode constants 
- * see documentation p646
+ * see documentation p494
 */
 #define MPI_MODE_RDONLY             1
 #define MPI_MODE_RDWR               2
@@ -22,7 +22,7 @@
 
 /**
  * error code
- * see documentation p712 table 14.5
+ * see documentation p556 table 13.3
  */
 #define MPI_ERR_FILE                    1
 #define MPI_ERR_NOT_SAME                2
@@ -53,7 +53,6 @@ namespace gpu_mpi {
     };
 
     __device__ int MPI_FILE_OPEN(MPI_Comm comm, const char *filename, int amode, MPI_Info info, MPI_File *fh);
-
 }
 
 #endif
