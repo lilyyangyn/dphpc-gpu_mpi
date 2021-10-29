@@ -10,7 +10,7 @@ struct FileOpenAmodeCorrect {
 
         MPI_Info info;
         MPI_File fh;
-        int err = MPI_FILE_OPEN(MPI_COMM_WORLD, nullptr, MPI_MODE_RDONLY, info, &fh);
+        int err = MPI_File_open(MPI_COMM_WORLD, nullptr, MPI_MODE_RDONLY, info, &fh);
         ok = err == 0;
 
         MPI_Finalize();
@@ -29,49 +29,49 @@ struct FileOpenAmodeIncorrect {
         MPI_Info info;
         MPI_File fh;
         int err;
-        err = MPI_FILE_OPEN(MPI_COMM_WORLD, nullptr, MPI_MODE_RDONLY | MPI_MODE_RDWR, info, &fh);
+        err = MPI_File_open(MPI_COMM_WORLD, nullptr, MPI_MODE_RDONLY | MPI_MODE_RDWR, info, &fh);
         ok = err == MPI_ERR_AMODE;
         if(!ok){
             MPI_Finalize();
             return;
         }
 
-        err = MPI_FILE_OPEN(MPI_COMM_WORLD, nullptr, MPI_MODE_RDONLY | MPI_MODE_WRONLY, info, &fh);
+        err = MPI_File_open(MPI_COMM_WORLD, nullptr, MPI_MODE_RDONLY | MPI_MODE_WRONLY, info, &fh);
         ok = err == MPI_ERR_AMODE;
         if(!ok){
             MPI_Finalize();
             return;
         }
 
-        err = MPI_FILE_OPEN(MPI_COMM_WORLD, nullptr, MPI_MODE_RDWR | MPI_MODE_WRONLY, info, &fh);
+        err = MPI_File_open(MPI_COMM_WORLD, nullptr, MPI_MODE_RDWR | MPI_MODE_WRONLY, info, &fh);
         ok = err == MPI_ERR_AMODE;
         if(!ok){
             MPI_Finalize();
             return;
         }
 
-        err = MPI_FILE_OPEN(MPI_COMM_WORLD, nullptr, MPI_MODE_RDONLY | MPI_MODE_RDWR | MPI_MODE_WRONLY, info, &fh);
+        err = MPI_File_open(MPI_COMM_WORLD, nullptr, MPI_MODE_RDONLY | MPI_MODE_RDWR | MPI_MODE_WRONLY, info, &fh);
         ok = err == MPI_ERR_AMODE;
         if(!ok){
             MPI_Finalize();
             return;
         }
 
-        err = MPI_FILE_OPEN(MPI_COMM_WORLD, nullptr, MPI_MODE_CREATE | MPI_MODE_RDONLY, info, &fh);
+        err = MPI_File_open(MPI_COMM_WORLD, nullptr, MPI_MODE_CREATE | MPI_MODE_RDONLY, info, &fh);
         ok = err == MPI_ERR_AMODE;
         if(!ok){
             MPI_Finalize();
             return;
         }
 
-        err = MPI_FILE_OPEN(MPI_COMM_WORLD, nullptr, MPI_MODE_EXCL | MPI_MODE_RDONLY, info, &fh);
+        err = MPI_File_open(MPI_COMM_WORLD, nullptr, MPI_MODE_EXCL | MPI_MODE_RDONLY, info, &fh);
         ok = err == MPI_ERR_AMODE;
         if(!ok){
             MPI_Finalize();
             return;
         }
 
-        err = MPI_FILE_OPEN(MPI_COMM_WORLD, nullptr, MPI_MODE_SEQUENTIAL | MPI_MODE_RDWR, info, &fh);
+        err = MPI_File_open(MPI_COMM_WORLD, nullptr, MPI_MODE_SEQUENTIAL | MPI_MODE_RDWR, info, &fh);
         ok = err == MPI_ERR_AMODE;
         if(!ok){
             MPI_Finalize();

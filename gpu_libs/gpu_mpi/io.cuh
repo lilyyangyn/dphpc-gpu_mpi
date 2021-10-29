@@ -42,6 +42,16 @@
 #define MPI_ERR_IO                      16
 
 
+/**
+ * seek position
+ * see documentation p521
+ */
+#define MPI_SEEK_SET    1
+#define MPI_SEEK_CUR    2
+#define MPI_SEEK_END    3
+
+#define MPI_Offset      int
+
 namespace gpu_mpi {
 
     struct MPI_Info{
@@ -49,10 +59,16 @@ namespace gpu_mpi {
     };    
     
     struct MPI_File{
+        MPI_Comm comm;
+        int* seek_pos;
+        int amode;
         // todo
     };
 
-    __device__ int MPI_FILE_OPEN(MPI_Comm comm, const char *filename, int amode, MPI_Info info, MPI_File *fh);
+    // see documentation p493
+    __device__ int MPI_File_open(MPI_Comm comm, const char *filename, int amode, MPI_Info info, MPI_File *fh);
+    // see documentation p521
+    __device__ int MPI_File_seek(MPI_File fh, MPI_Offset offset, int whence);
 }
 
 #endif
