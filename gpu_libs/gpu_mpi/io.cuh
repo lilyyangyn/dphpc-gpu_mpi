@@ -2,6 +2,7 @@
 #define IO_CUH
 
 #include "mpi.cuh"
+#include <stdio.h>
 
 // See documentation: https://www.mpi-forum.org/docs/mpi-3.1/mpi31-report.pdf
 
@@ -62,13 +63,16 @@ namespace gpu_mpi {
         MPI_Comm comm;
         int* seek_pos;
         int amode;
+        FILE* file;
         // todo
     };
 
     // see documentation p493
     __device__ int MPI_File_open(MPI_Comm comm, const char *filename, int amode, MPI_Info info, MPI_File *fh);
-    // see documentation p521
+    // see documentation p520
     __device__ int MPI_File_seek(MPI_File fh, MPI_Offset offset, int whence);
+    // see documentation p521
+    __device__ int MPI_File_get_position(MPI_File fh, MPI_Offset *offset);
 }
 
 #endif

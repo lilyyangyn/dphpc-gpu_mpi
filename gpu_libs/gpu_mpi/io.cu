@@ -33,8 +33,17 @@ namespace gpu_mpi {
         // todo: initialize fh->comm
         // todo: initialize fh->seek_pos
         // todo: fh->seek_pos[] should be initialized to all zeros
+        // todo: initialize fh->file
         
         // todo
+        return 0;
+    }
+
+    __device__ int __get_file_size(FILE* file){
+        // fseek(file, 0L, SEEK_END);
+        // return ftell(file);
+        
+        // todo: how to get the file size? how to talk to cpu?
         return 0;
     }
 
@@ -59,9 +68,22 @@ namespace gpu_mpi {
             }
             fh.seek_pos[rank] = new_offset;
         }else if(whence == MPI_SEEK_END){
-            // todo
+            int sz = __get_file_size(fh.file);
+            int new_offset = sz + offset;
+            if(new_offset < 0){
+                // see documentation p521 line 11
+                return MPI_ERR_UNSUPPORTED_OPERATION;
+            }
+            fh.seek_pos[rank] = new_offset;
         }
 
+        return 0;
+    }
+
+    __device__ int MPI_File_get_position(MPI_File fh, MPI_Offset *offset){
+        int rank;
+        MPI_Comm_rank(fh.comm, &rank);
+        *offset = fh.seek_pos[rank];
         return 0;
     }
 }
