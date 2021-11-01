@@ -80,6 +80,16 @@ namespace gpu_mpi {
         return 0;
     }
 
+    __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
+        //todo
+        return 0;
+    }
+    
+    __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
+        //todo
+        return 0;
+    }
+
     __device__ int MPI_File_get_position(MPI_File fh, MPI_Offset *offset){
         int rank;
         MPI_Comm_rank(fh.comm, &rank);
