@@ -141,4 +141,24 @@ namespace gpu_mpi {
         *offset = fh.seek_pos[rank];
         return 0;
     }
+
+    __device__ int MPI_File_close(MPI_File *fh){
+        // synchronize file state
+        fflush(fh->file);
+
+        int rank;
+        MPI_Comm_rank(fh->comm, &rank);
+
+        // only free the file handle object once
+        if(rank == 0){
+            // close the file associated with file handle
+            fclose(fh->file);
+            // release the fh object
+            free(fh);
+            fh = MPI_FILE_NULL;
+        }
+        __syncthreads();
+        //MPI_Barrier(MPI_COMM_WORLD);
+        return 0;
+    }
 }

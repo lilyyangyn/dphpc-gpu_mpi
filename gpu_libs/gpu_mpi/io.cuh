@@ -54,6 +54,7 @@
 #define MPI_SEEK_END    3
 
 #define MPI_Offset      int
+#define MPI_FILE_NULL NULL
 
 namespace gpu_mpi {
 
@@ -71,6 +72,8 @@ namespace gpu_mpi {
 
     // see documentation p493
     __device__ int MPI_File_open(MPI_Comm comm, const char *filename, int amode, MPI_Info info, MPI_File *fh);
+    // see documentation p496
+    __device__ int MPI_File_close(MPI_File *fh);
     // see documentation p520
     __device__ int MPI_File_seek(MPI_File fh, MPI_Offset offset, int whence);
     // mpi3.1 p516
