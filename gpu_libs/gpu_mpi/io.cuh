@@ -25,22 +25,24 @@
  * error code
  * see documentation p556 table 13.3
  */
-#define MPI_ERR_FILE                    1
-#define MPI_ERR_NOT_SAME                2
-#define MPI_ERR_AMODE                   3
-#define MPI_ERR_UNSUPPORTED_DATAREP     4
-#define MPI_ERR_UNSUPPORTED_OPERATION   5
-#define MPI_ERR_NO_SUCH_FILE            6
-#define MPI_ERR_FILE_EXISTS             7
-#define MPI_ERR_BAD_FILE                8
-#define MPI_ERR_ACCESS                  9
-#define MPI_ERR_NO_SPACE                10
-#define MPI_ERR_QUOTA                   11
-#define MPI_ERR_READ_ONLY               12
-#define MPI_ERR_FILE_IN_USE             13
-#define MPI_ERR_DUP_DATAREP             14
-#define MPI_ERR_CONVERSION              15
-#define MPI_ERR_IO                      16
+#define MPI_ERR_FILE                    1       // Invalid file handle
+#define MPI_ERR_NOT_SAME                2       // Collective argument not identical on all processes, 
+                                                //     or collective routines called in a different order by different processes
+#define MPI_ERR_AMODE                   3       // Error related to the amode passed to MPI_FILE_OPEN
+#define MPI_ERR_UNSUPPORTED_DATAREP     4       // Unsupported datarep passed to MPI_FILE_SET_VIEW
+#define MPI_ERR_UNSUPPORTED_OPERATION   5       // Unsupported operation, such as seeking on a file which supports sequential access only
+#define MPI_ERR_NO_SUCH_FILE            6       // File does not exist
+#define MPI_ERR_FILE_EXISTS             7       // File exists
+#define MPI_ERR_BAD_FILE                8       // Invalid file name (e.g., path name too long)
+#define MPI_ERR_ACCESS                  9       // Permission denied
+#define MPI_ERR_NO_SPACE                10      // Not enough space
+#define MPI_ERR_QUOTA                   11      // Quota exceeded
+#define MPI_ERR_READ_ONLY               12      // Read-only file or file system
+#define MPI_ERR_FILE_IN_USE             13      // File operation could not be completed, as the file is currently open by some process
+#define MPI_ERR_DUP_DATAREP             14      // Conversion functions could not be registered because a data representation identifier 
+                                                //      that was already defined was passed to MPI_REGISTER_DATAREP
+#define MPI_ERR_CONVERSION              15      // An error occurred in a user supplied data conversion function.
+#define MPI_ERR_IO                      16      // Other I/O error
 
 
 /**
