@@ -56,6 +56,7 @@
 #define MPI_Offset      int
 #define MPI_FILE_NULL NULL
 
+struct MPI_Status;
 namespace gpu_mpi { 
     struct MPI_Info{
         // todo
@@ -75,9 +76,9 @@ namespace gpu_mpi {
     __device__ int MPI_File_close(MPI_File *fh);
     // see documentation p520
     __device__ int MPI_File_seek(MPI_File fh, MPI_Offset offset, int whence);
-    // // mpi3.1 p516
-    // __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype datatype, MPI_Status *status);
-    // __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datatype datatype, MPI_Status *status);
+    // mpi3.1 p516
+    __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype datatype, MPI_Status *status);
+    __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datatype datatype, MPI_Status *status);
 
     // see documentation p521
     __device__ int MPI_File_get_position(MPI_File fh, MPI_Offset *offset);
