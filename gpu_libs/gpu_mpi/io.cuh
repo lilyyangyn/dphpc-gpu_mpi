@@ -56,8 +56,7 @@
 #define MPI_Offset      int
 #define MPI_FILE_NULL NULL
 
-namespace gpu_mpi {
-
+namespace gpu_mpi { 
     struct MPI_Info{
         // todo
     };    
