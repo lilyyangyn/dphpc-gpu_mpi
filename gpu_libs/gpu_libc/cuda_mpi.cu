@@ -554,6 +554,8 @@ __host__ __device__ void* FreeManagedMemory::allocate(size_t size) {
                 // first used block
                 memBlock->status = USED;
                 memBlock->end = newBlockEnd;
+
+                return (void*) &buffer[blockDataStart];
             }
         }
 
@@ -572,13 +574,15 @@ __host__ __device__ void FreeManagedMemory::free(void* ptr) {
         progress();
     }
 
+    ptr = (char*)ptr - sizeof(BlockDescriptor);
+
     auto unlockGuard = makeScopeGuard([&](){ lock.unlock(); });
 
     assert(&buffer[0] <= ptr);
     size_t pos = ((char*)ptr) - &buffer[0];
     assert(pos < buffer.size());
 
-    BlockDescriptor* memBlock = (BlockDescriptor*)(&ptr);
+    BlockDescriptor* memBlock = (BlockDescriptor*)(ptr);
     assert(memBlock->status == USED);
 
     memBlock->status = FREE;
