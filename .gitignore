@@ -3,3 +3,4 @@ build/
 *.Rhistory
 tags
 .vscode
+llvm/
