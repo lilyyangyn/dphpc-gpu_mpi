@@ -1,22 +1,23 @@
 #include "libc_processor.cuh"
+#include "../gpu_mpi/io.cuh"
 
 #include <stdio.h>
 
+int get_i_flag(void* mem){
+    return ((int*)mem)[0];
+}
+
+void set_i_ready_flag(void* mem){
+    ((int*)mem)[0] = I_READY;
+}
+
 void process_gpu_libc(void* mem, size_t size) {
-
-    // step 1, copy mem(int devide) to a host addr
-    void* buf = malloc(size);
-    cudaMemcpy(buf, mem, size, cudaMemcpyDeviceToHost); // bug
-
-    // step 2, execute the instruction
-
-
-
-
-
-    // FILE* file = fopen("/home/raliao/gpu_mpi/testfile", "w");
-    // fwrite("data\n", 1, 5, file);
-
-
-
+    if(get_i_flag(mem) == I_FSEEK){
+        FILE* file = ((FILE**)mem)[1];
+        // todo: is lock needed?
+        fseek(file, 0L, SEEK_END);
+        ((long int*)mem)[1] = ftell(file);
+        set_i_ready_flag(mem);
+        return;
+    }
 }

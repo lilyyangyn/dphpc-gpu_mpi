@@ -56,6 +56,9 @@
 #define MPI_Offset      int
 #define MPI_FILE_NULL NULL
 
+#define I_READY  0
+#define I_FSEEK  1
+
 struct MPI_Status;
 namespace gpu_mpi { 
     struct MPI_Info{

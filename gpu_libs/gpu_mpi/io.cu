@@ -1,4 +1,5 @@
 #include "io.cuh"
+#include "../gpu_main/device_host_comm.cuh"
 
 // #include "mpi.cuh"
 
@@ -38,12 +39,17 @@ namespace gpu_mpi {
         return 0;
     }
 
-    __device__ int __get_file_size(FILE* file){
-        // fseek(file, 0L, SEEK_END);
-        // return ftell(file);
-        
-        // todo: how to get the file size? how to talk to cpu?
-        return 0;
+    __device__ long int __get_file_size(FILE* file){
+        int buffer_size = 128;
+        char* data = (char*) allocate_host_mem(buffer_size);
+        ((int*)data)[0] = I_FSEEK;
+        ((FILE**)data)[1] = file;
+        delegate_to_host((void*)data, buffer_size);
+        // wait
+        while(((int*)data)[0] != I_READY){};
+        long int file_length = ((long int*)data)[1];
+        free_host_mem(data);
+        return file_length;
     }
 
     __device__ int MPI_File_open(MPI_Comm comm, const char *filename, int amode, MPI_Info info, MPI_File *fh){
