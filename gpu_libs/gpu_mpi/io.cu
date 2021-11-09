@@ -154,6 +154,14 @@ namespace gpu_mpi {
     __device__ int MPI_File_close(MPI_File *fh){
         // synchronize file state
         //fflush(fh->file);
+        int buffer_size = 128;
+        char* data = (char*) allocate_host_mem(buffer_size);
+        ((int*)data)[0] = I_FFLUSH;
+        ((FILE**)data)[1] = fh->file;
+        delegate_to_host((void*)data, buffer_size);
+        // wait
+        while(((int*)data)[0] != I_READY){};
+        //fflush done
 
         int rank;
         MPI_Comm_rank(fh->comm, &rank);
@@ -162,6 +170,14 @@ namespace gpu_mpi {
         if(rank == 0){
             // close the file associated with file handle
             //fclose(fh->file);
+            ((int*)data)[0] = I_FCLOSE;
+            ((FILE**)data)[1] = fh->file;
+            delegate_to_host((void*)data, buffer_size);
+            // wait
+            while(((int*)data)[0] != I_READY){};
+            //fclose done
+            free_host_mem(data);
+            
             // release the fh object
             free(fh);
             fh = MPI_FILE_NULL;

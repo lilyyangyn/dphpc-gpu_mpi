@@ -20,4 +20,14 @@ void process_gpu_libc(void* mem, size_t size) {
         set_i_ready_flag(mem);
         return;
     }
+    if(get_i_flag(mem) == I_FFLUSH){
+        FILE* file = ((FILE**)mem)[1];
+        fflush(file);
+        set_i_ready_flag(mem);
+    }
+    if(get_i_flag(mem) == I_FCLOSE){
+        FILE* file = ((FILE**)mem)[1];
+        fclose(file);
+        set_i_ready_flag(mem);
+    }
 }
