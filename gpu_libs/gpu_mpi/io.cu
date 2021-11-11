@@ -174,8 +174,25 @@ namespace gpu_mpi {
     }
 
     __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
-        //todo
-        return 0;
+        if (!(fh.amode & MPI_MODE_RDONLY) && !(fh.amode & MPI_MODE_RDWR)) return MPI_ERR_AMODE;
+        if (fh.amode & MPI_MODE_SEQUENTIAL) return MPI_ERR_UNSUPPORTED_OPERATION;  // p514 l43
+        // TODO: Only one thread with RDWR can gain access; unlimited threads with RDONLY can gain access (?)
+
+        int buffer_size = 128;
+        void* data = (void*)allocate_host_mem(buffer_size);
+        ((int*)data)[0] = I_FREAD;
+        ((FILE**)data)[1] = fh.file;
+        ((MPI_Datatype*)data)[2] = datatype;
+        ((void**)data)[3] = buf;
+        ((int*)data)[4] = count;
+        
+        delegate_to_host((void*)data, buffer_size);
+        while (((int*)data)[0] != I_READY)
+        {
+            // just wait
+        }
+
+        return ((size_t*)data)[1];
     }
     
     __device__ int __howManyBits(int x) {

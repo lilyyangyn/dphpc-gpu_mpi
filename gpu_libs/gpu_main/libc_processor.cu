@@ -97,4 +97,17 @@ void process_gpu_libc(void* mem, size_t size) {
         ((FILE **)mem)[1] = file;
         set_i_ready_flag(mem);
     }
+    if(get_i_flag(mem) == I_FREAD){
+        // This param order is in accordance with FWRITE
+        FILE* file = ((FILE**)mem)[1];
+        MPI_Datatype datatype = ((MPI_Datatype*)mem)[2];
+        void* buf = ((void**)mem)[3];
+        int count = ((int*)mem)[4];
+
+        ((size_t*)mem)[1] = fread(buf, sizeof(datatype), count, file);
+        // p507 l42
+        // nb fread() forwards the file pointer, so no need to manually forward it.
+        
+        set_i_ready_flag(mem);
+    }
 }
