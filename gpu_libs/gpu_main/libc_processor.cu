@@ -91,8 +91,17 @@ void process_gpu_libc(void* mem, size_t size) {
         printf("cjc2 out\n");
     }
     if(get_i_flag(mem) == I_FOPEN){
-        const char* filename = ((const char**)mem)[1];
-        const char* mode = ((const char**)mem)[2];
+        int mode_flag = ((int*)mem)[1];
+        const char* mode;
+        if(mode_flag == I_FOPEN_MODE_RD){
+            mode = "r";
+        }else if (mode_flag == I_FOPEN_MODE_RW) {
+            mode = "r+";
+        }else if (mode_flag == I_FOPEN_MODE_WD) {
+            mode = "a+";
+        }
+
+        const char* filename = (const char*)((char*)mem)[2];
         FILE* file = fopen(filename, mode);
         ((FILE **)mem)[1] = file;
         set_i_ready_flag(mem);

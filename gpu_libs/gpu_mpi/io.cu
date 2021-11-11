@@ -7,15 +7,18 @@
 namespace gpu_mpi {
 
 
-    __device__ FILE* __open_file(const char* filename, const char* mode){
+    __device__ FILE* __open_file(const char* filename, int mode){
         if(filename == NULL){
             return nullptr;
         }
         int buffer_size = 128;
         char* data = (char*) allocate_host_mem(buffer_size);
         ((int*)data)[0] = I_FOPEN;
-        ((const char**)data)[1] = filename;
-        ((const char**)data)[2] = mode;
+        ((int*)data)[1] = mode;
+
+        int filename_size = 0;
+        while (filename[filename_size] != '\0') filename_size++;
+        memcpy( (void*)((char*)data)[1] , (void*)filename, filename_size);
         delegate_to_host((void*)data, buffer_size);
         // wait
         while(((int*)data)[0] != I_READY){};
@@ -80,7 +83,7 @@ namespace gpu_mpi {
             fh->comm = comm;
 
             // initialize fh->file
-            fh->file = __open_file(filename, "r");
+            fh->file = __open_file(filename, I_FOPEN_MODE_RD);
 
             // check file existence
             if(fh->file == NULL){
@@ -104,12 +107,11 @@ namespace gpu_mpi {
 
             if(!(amode & MPI_MODE_RDONLY)){
                 __close_file(fh->file);
-                const char *mode;
+                int mode;
                 if(amode & MPI_MODE_RDWR){
-                    mode = "r+";
+                    mode = I_FOPEN_MODE_RW;
                 }else if(amode & MPI_MODE_WRONLY){
-                    // TODO: append or overwrite???
-                    mode = "a";
+                    mode = I_FOPEN_MODE_WD;
                 }
                 fh->file = __open_file(filename, mode);
             }
