@@ -6,37 +6,40 @@
 //why we need this namespace? MPI_File struct is in this namespace 
 namespace gpu_mpi {
 
-    __host__ __device__ int __open_file(const char *filename, int amode, MPI_File *fh){
-        FILE* file = NULL;
 
-        // check file existence
-        // TODO: file=fopen(filename,"r");
-        if(file == NULL){
-            if(!(amode & MPI_MODE_CREATE)) {
-                return MPI_ERR_NO_SUCH_FILE;
-            }
-            // No need to create new file as file will be created below
-        }else{
-            // TODO: fclose(file);
-            if(amode & MPI_MODE_EXCL) {
-                // File must not exist
-                return MPI_ERR_FILE_EXISTS;
-            }
+    __device__ FILE* __open_file(const char* filename, const char* mode){
+        if(filename == NULL){
+            return nullptr;
         }
-
-        const char *mode;
-        if(amode & MPI_MODE_RDONLY){
-            mode = "r";
-        }else if(amode & MPI_MODE_RDWR){
-            mode = "r+";
-        }else if(amode & MPI_MODE_WRONLY){
-            // TODO: append or overwrite???
-            mode = "a";
-        }
+        int buffer_size = 128;
+        char* data = (char*) allocate_host_mem(buffer_size);
+        ((int*)data)[0] = I_FOPEN;
+        ((const char**)data)[1] = filename;
+        ((const char**)data)[2] = mode;
+        delegate_to_host((void*)data, buffer_size);
+        // wait
+        while(((int*)data)[0] != I_READY){};
         
-        // TODO: fh->file = fopen(filename, mode);
+        FILE* file = ((FILE**)data)[1];
+        free_host_mem(data);
+        return file;
+    }
 
-        return 0;
+    __device__ void __close_file(FILE* file){
+        if(file == NULL){
+            return;
+        }
+
+        int buffer_size = 128;
+        char* data = (char*) allocate_host_mem(buffer_size);
+        // close the file associated with file handle
+        ((int*)data)[0] = I_FCLOSE;
+        ((FILE**)data)[1] = file;
+        delegate_to_host((void*)data, buffer_size);
+        // wait
+        while(((int*)data)[0] != I_READY){};
+        //fclose done
+        free_host_mem(data);
     }
 
     __device__ long int __get_file_size(FILE* file){
@@ -53,32 +56,62 @@ namespace gpu_mpi {
     }
 
     __device__ int MPI_File_open(MPI_Comm comm, const char *filename, int amode, MPI_Info info, MPI_File *fh){
+        __device__ __shared__ int err_code;
         // check amode
         if (((amode & MPI_MODE_RDONLY) ? 1 : 0) + ((amode & MPI_MODE_RDWR) ? 1 : 0) +
             ((amode & MPI_MODE_WRONLY) ? 1 : 0) != 1) {
-           // see documentation p495 line 7
-           return MPI_ERR_AMODE;
+            // see documentation p495 line 7
+            err_code = MPI_ERR_AMODE;
         }
         if(((amode & MPI_MODE_CREATE) || (amode & MPI_MODE_EXCL)) && (amode & MPI_MODE_RDONLY)){
             // see documentation p495 line 8
-            return MPI_ERR_AMODE;
+            err_code = MPI_ERR_AMODE;
         }
         if((amode & MPI_MODE_RDWR) && (amode & MPI_MODE_SEQUENTIAL)){
             // see documentation p495 line 9
-            return MPI_ERR_AMODE;
+            err_code = MPI_ERR_AMODE;
         }
 
         // create MPI_FILE
         int rank;
         MPI_Comm_rank(comm, &rank);
-        if(rank == 0){
+        if(err_code == 0 && rank == 0){
             fh->amode = amode;
             fh->comm = comm;
 
             // initialize fh->file
-            int status = __open_file(filename, amode, fh);
-            if(status != 0) {
-                // TODO: how to handel error code between different threads?
+            fh->file = __open_file(filename, "r");
+
+            // check file existence
+            if(fh->file == NULL){
+                if(!(amode & MPI_MODE_RDONLY)){
+                    err_code = MPI_ERR_NO_SUCH_FILE;
+                }
+                if(!(amode & MPI_MODE_CREATE)){
+                    err_code = MPI_ERR_NO_SUCH_FILE;
+                }
+            }
+            if(amode & MPI_MODE_EXCL){
+                // File must not exist
+                err_code = MPI_ERR_FILE_EXISTS;
+            }
+
+            if(err_code != 0) {
+                __close_file(fh->file);
+                __syncthreads();
+                return err_code;
+            }
+
+            if(!(amode & MPI_MODE_RDONLY)){
+                __close_file(fh->file);
+                const char *mode;
+                if(amode & MPI_MODE_RDWR){
+                    mode = "r+";
+                }else if(amode & MPI_MODE_WRONLY){
+                    // TODO: append or overwrite???
+                    mode = "a";
+                }
+                fh->file = __open_file(filename, mode);
             }
             
             // initialize fh->seek_pos
@@ -95,10 +128,9 @@ namespace gpu_mpi {
             memset(fh->seek_pos, init_pos, sizeof(int) * size);
         }
         
-        // TODO: check whether synchronization is in need
         __syncthreads();
         
-        return 0;
+        return err_code;
     }
 
     __device__ int MPI_File_seek(MPI_File fh, MPI_Offset offset, int whence){

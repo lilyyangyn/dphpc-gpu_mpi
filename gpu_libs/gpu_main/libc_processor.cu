@@ -30,4 +30,11 @@ void process_gpu_libc(void* mem, size_t size) {
         fclose(file);
         set_i_ready_flag(mem);
     }
+    if(get_i_flag(mem) == I_FOPEN){
+        const char* filename = ((const char**)mem)[1];
+        const char* mode = ((const char**)mem)[2];
+        FILE* file = fopen(filename, mode);
+        ((FILE **)mem)[1] = file;
+        set_i_ready_flag(mem);
+    }
 }

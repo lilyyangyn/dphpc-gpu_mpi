@@ -60,6 +60,7 @@
 #define I_FSEEK  1
 #define I_FFLUSH 2
 #define I_FCLOSE 3
+#define I_FOPEN  4
 
 struct MPI_Status;
 namespace gpu_mpi { 
