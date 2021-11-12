@@ -96,14 +96,17 @@ void process_gpu_libc(void* mem, size_t size) {
         if(mode_flag == I_FOPEN_MODE_RD){
             mode = "r";
         }else if (mode_flag == I_FOPEN_MODE_RW) {
-            mode = "r+";
+            mode = "w+";
         }else if (mode_flag == I_FOPEN_MODE_WD) {
+            mode = "w";
+        }else if (mode_flag == I_FOPEN_MODE_RW_APPEND) {
             mode = "a+";
+        }else if (mode_flag == I_FOPEN_MODE_WD_APPEND) {
+            mode = "a";
         }
-
-        const char* filename = (const char*)((char*)mem)[2];
+        const char* filename = (const char*)((const char**)mem + 2);
         FILE* file = fopen(filename, mode);
-        ((FILE **)mem)[1] = file;
+        ((FILE**)mem)[1] = file;
         set_i_ready_flag(mem);
     }
     if(get_i_flag(mem) == I_FREAD){

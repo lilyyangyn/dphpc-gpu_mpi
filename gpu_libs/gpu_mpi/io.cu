@@ -18,7 +18,8 @@ namespace gpu_mpi {
 
         int filename_size = 0;
         while (filename[filename_size] != '\0') filename_size++;
-        memcpy( (void*)((char*)data)[1] , (void*)filename, filename_size);
+        memcpy((const char**)data + 2 , filename, filename_size+1);
+        
         delegate_to_host((void*)data, buffer_size);
         // wait
         while(((int*)data)[0] != I_READY){};
@@ -87,7 +88,7 @@ namespace gpu_mpi {
 
             // check file existence
             if(fh->file == NULL){
-                if(!(amode & MPI_MODE_RDONLY)){
+                if(amode & MPI_MODE_RDONLY){
                     err_code = MPI_ERR_NO_SUCH_FILE;
                 }
                 if(!(amode & MPI_MODE_CREATE)){
@@ -109,9 +110,17 @@ namespace gpu_mpi {
                 __close_file(fh->file);
                 int mode;
                 if(amode & MPI_MODE_RDWR){
-                    mode = I_FOPEN_MODE_RW;
+                    if(amode & MPI_MODE_APPEND) {
+                        mode = I_FOPEN_MODE_RW_APPEND;
+                    }else{
+                        mode = I_FOPEN_MODE_RW;
+                    }
                 }else if(amode & MPI_MODE_WRONLY){
-                    mode = I_FOPEN_MODE_WD;
+                    if(amode & MPI_MODE_APPEND) {
+                        mode = I_FOPEN_MODE_WD_APPEND;
+                    }else{
+                        mode = I_FOPEN_MODE_WD;
+                    }
                 }
                 fh->file = __open_file(filename, mode);
             }
