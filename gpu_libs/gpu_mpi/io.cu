@@ -61,6 +61,8 @@ namespace gpu_mpi {
 
     __device__ int MPI_File_open(MPI_Comm comm, const char *filename, int amode, MPI_Info info, MPI_File *fh){
         __device__ __shared__ int err_code;
+        __device__ __shared__ MPI_File shared_fh;
+
         // check amode
         if (((amode & MPI_MODE_RDONLY) ? 1 : 0) + ((amode & MPI_MODE_RDWR) ? 1 : 0) +
             ((amode & MPI_MODE_WRONLY) ? 1 : 0) != 1) {
@@ -80,14 +82,14 @@ namespace gpu_mpi {
         int rank;
         MPI_Comm_rank(comm, &rank);
         if(err_code == 0 && rank == 0){
-            fh->amode = amode;
-            fh->comm = comm;
+            shared_fh.amode = amode;
+            shared_fh.comm = comm;
 
             // initialize fh->file
-            fh->file = __open_file(filename, I_FOPEN_MODE_RD);
+            shared_fh.file = __open_file(filename, I_FOPEN_MODE_RD);
 
             // check file existence
-            if(fh->file == NULL){
+            if(shared_fh.file == NULL){
                 if(amode & MPI_MODE_RDONLY){
                     err_code = MPI_ERR_NO_SUCH_FILE;
                 }
@@ -101,13 +103,13 @@ namespace gpu_mpi {
             }
 
             if(err_code != 0) {
-                __close_file(fh->file);
+                __close_file(shared_fh.file);
                 __syncthreads();
                 return err_code;
             }
 
             if(!(amode & MPI_MODE_RDONLY)){
-                __close_file(fh->file);
+                __close_file(shared_fh.file);
                 int mode;
                 if(amode & MPI_MODE_RDWR){
                     if(amode & MPI_MODE_APPEND) {
@@ -122,24 +124,25 @@ namespace gpu_mpi {
                         mode = I_FOPEN_MODE_WD;
                     }
                 }
-                fh->file = __open_file(filename, mode);
+                shared_fh.file = __open_file(filename, mode);
             }
             
             // initialize fh->seek_pos
             // TODO: MPI_MODE_UNIQUE_OPEN -> Only one seek_pos???
             int size;
             MPI_Comm_rank(comm, &size);
-            fh->seek_pos = new int[size];
+            shared_fh.seek_pos = new int[size];
             int init_pos = 0;
             if(amode & MPI_MODE_APPEND){
                 // In append mode: set pointer to end of file 
                 // see documentation p494 line 42
-                init_pos = __get_file_size(fh->file);
+                init_pos = __get_file_size(shared_fh.file);
             }
-            memset(fh->seek_pos, init_pos, sizeof(int) * size);
+            memset(shared_fh.seek_pos, init_pos, sizeof(int) * size);
         }
         
         __syncthreads();
+        *fh = shared_fh;
         
         return err_code;
     }
