@@ -177,21 +177,24 @@ namespace gpu_mpi {
         if (!(fh.amode & MPI_MODE_RDONLY) && !(fh.amode & MPI_MODE_RDWR)) return MPI_ERR_AMODE;
         if (fh.amode & MPI_MODE_SEQUENTIAL) return MPI_ERR_UNSUPPORTED_OPERATION;  // p514 l43
         // TODO: Only one thread with RDWR can gain access; unlimited threads with RDONLY can gain access (?)
+        // TODO: write into MPI_Status
 
-        int buffer_size = 128;
+        int buffer_size = sizeof(int) + sizeof(FILE*) + sizeof(MPI_Datatype) + sizeof(void*) + sizeof(int) + 2048;  // (TODO: dynamic size) sizeof(datatype) * count;
         void* data = (void*)allocate_host_mem(buffer_size);
         ((int*)data)[0] = I_FREAD;
         ((FILE**)data)[1] = fh.file;
         ((MPI_Datatype*)data)[2] = datatype;
-        ((void**)data)[3] = buf;
+        ((void**)data)[3] = (void**)data + 5;  // buf;
         ((int*)data)[4] = count;
         
         delegate_to_host((void*)data, buffer_size);
         while (((int*)data)[0] != I_READY)
         {
-            // just wait
+            // blocking wait (p506 l44)
         }
 
+        memcpy(buf, (void**)data + 5, sizeof(datatype) * count);
+        free_host_mem(data);
         return ((size_t*)data)[1];
     }
     

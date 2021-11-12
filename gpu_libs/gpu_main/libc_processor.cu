@@ -106,7 +106,7 @@ void process_gpu_libc(void* mem, size_t size) {
 
         ((size_t*)mem)[1] = fread(buf, sizeof(datatype), count, file);
         // p507 l42
-        // nb fread() forwards the file pointer, so no need to manually forward it.
+        // nb. fread() forwards the file pointer, so no need to manually forward it.
         
         set_i_ready_flag(mem);
     }
