@@ -59,6 +59,7 @@ namespace gpu_mpi {
         return file_length;
     }
 
+
     __device__ int MPI_File_open(MPI_Comm comm, const char *filename, int amode, MPI_Info info, MPI_File *fh){
         __device__ __shared__ int err_code;
         __device__ __shared__ MPI_File shared_fh;
@@ -131,7 +132,7 @@ namespace gpu_mpi {
             // TODO: MPI_MODE_UNIQUE_OPEN -> Only one seek_pos???
             int size;
             MPI_Comm_rank(comm, &size);
-            shared_fh.seek_pos = new int[size];
+            fh->seek_pos = (int*)malloc(size*sizeof(int));
             int init_pos = 0;
             if(amode & MPI_MODE_APPEND){
                 // In append mode: set pointer to end of file 
@@ -143,7 +144,7 @@ namespace gpu_mpi {
         
         __syncthreads();
         *fh = shared_fh;
-        
+
         return err_code;
     }
 
@@ -266,17 +267,10 @@ namespace gpu_mpi {
         return 0;
     }
 
+
     __device__ int MPI_File_close(MPI_File *fh){
         // synchronize file state
-        //fflush(fh->file);
-        int buffer_size = 128;
-        char* data = (char*) allocate_host_mem(buffer_size);
-        ((int*)data)[0] = I_FFLUSH;
-        ((FILE**)data)[1] = fh->file;
-        delegate_to_host((void*)data, buffer_size);
-        // wait
-        while(((int*)data)[0] != I_READY){};
-        //fflush done
+        __syncthreads();
 
         int rank;
         MPI_Comm_rank(fh->comm, &rank);
@@ -284,18 +278,11 @@ namespace gpu_mpi {
         // only free the file handle object once
         if(rank == 0){
             // close the file associated with file handle
-            //fclose(fh->file);
-            ((int*)data)[0] = I_FCLOSE;
-            ((FILE**)data)[1] = fh->file;
-            delegate_to_host((void*)data, buffer_size);
-            // wait
-            while(((int*)data)[0] != I_READY){};
-            //fclose done
-            free_host_mem(data);
+            // fclose(fh->file);
+            __close_file(fh->file);
             
             // release the fh object
-            free(fh);
-            fh = MPI_FILE_NULL;
+            free(fh->seek_pos);
         }
         __syncthreads();
         //MPI_Barrier(MPI_COMM_WORLD);
