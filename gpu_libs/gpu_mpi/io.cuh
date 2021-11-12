@@ -64,6 +64,10 @@
 #define I_FWRITE 5
 #define I_FOPEN  6
 
+#define I_FOPEN_MODE_RD 0
+#define I_FOPEN_MODE_RW 1
+#define I_FOPEN_MODE_WD 2
+
 struct MPI_Status;
 namespace gpu_mpi { 
     struct MPI_Info{
