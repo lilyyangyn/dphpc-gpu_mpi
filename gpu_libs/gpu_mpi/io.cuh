@@ -54,7 +54,7 @@
 #define MPI_SEEK_END    3
 
 #define MPI_Offset      int
-#define MPI_FILE_NULL NULL
+#define MPI_FILE_NULL nullptr
 
 #define I_READY  0
 #define I_FSEEK  1
