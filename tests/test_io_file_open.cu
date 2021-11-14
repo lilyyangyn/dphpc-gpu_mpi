@@ -10,10 +10,12 @@ struct FileOpenAmodeCorrect {
 
         MPI_Info info;
         MPI_File fh;
-        int err = MPI_File_open(MPI_COMM_WORLD, nullptr, MPI_MODE_RDONLY, info, &fh);
-        // int err = MPI_File_open(MPI_COMM_WORLD, "test.txt", MPI_MODE_RDWR || MPI_MODE_CREATE, info, &fh);
-        ok = err == 0;
-        // ok = fh.file != 0;
+        // int err MPI_File_open(MPI_COMM_WORLD, nullptr, MPI_MODE_RDONLY, info, &fh);
+        int err = MPI_File_open(MPI_COMM_WORLD, "test.txt", MPI_MODE_RDWR | MPI_MODE_CREATE, info, &fh);
+        // ok = err == MPI_ERR_NO_SUCH_FILE;
+        // ok = err == 0;
+        ok = fh.file != NULL;
+        
 
         MPI_Finalize();
     }
