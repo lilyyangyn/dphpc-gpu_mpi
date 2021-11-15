@@ -260,11 +260,11 @@ namespace gpu_mpi {
         delegate_to_host((void*)data, buffer_size);
         // wait
         while(((int*)data)[0] != I_READY){};
-        //TODO: step 3 right return value
-        
+        int return_value = ((size_t*)mem)[1];
         free_host_mem(data);
         //TODO: step 4 error catching
-        return 0;
+        //#memory cosistency: assuming that write is not reordered with write
+        return return_value;
     }
 
 
