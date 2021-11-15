@@ -17,7 +17,7 @@ struct FileWriteTest {
         int ret_val=0;
         char *a="ccchello world";
 
-        MPI_File_open(MPI_COMM_WORLD, "test.txt",
+        MPI_File_open(MPI_COMM_WORLD, "test_open.txt",
                   MPI_MODE_CREATE | MPI_MODE_RDWR, info, &fh);
         if(rank==0)
             ret_val = MPI_File_write(fh,a,__gpu_strlen(a),MPI_CHAR,nullptr);
