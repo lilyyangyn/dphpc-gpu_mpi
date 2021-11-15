@@ -68,27 +68,15 @@ void process_gpu_libc(void* mem, size_t size) {
         set_i_ready_flag(mem);
     }
     if(get_i_flag(mem) == I_FWRITE){
-        // FILE* file = ((FILE**)mem)[1]; // encoded FILE* retrieve with (FILE* )*
+        FILE* file = *((FILE**)(mem+8)); // encoded FILE* retrieve with (FILE* )*
+        int count = *((int*)(mem+4));
+        // __show_memory((char *)mem,64);
+        MPI_Datatype datatype = *((MPI_Datatype *)(mem+16));
 
-        //非正常操作
-        FILE* file = fopen("cjc1","w");
-        //end of 非正常操作
-
-        MPI_Datatype datatype = ((MPI_Datatype*)mem)[2];
         //TODO: MPI_Type_size not implemented
         assert(datatype==MPI_CHAR);
-        ((size_t*)mem)[1] = fwrite( (void*)((char*)mem)[3], sizeof(char), size-sizeof(MPI_Datatype*)-sizeof(FILE*)-sizeof(int*), file);
+        ((size_t*)mem)[1] = fwrite( ((const char**)mem+24), sizeof(char), count, file);
         set_i_ready_flag(mem);
-        // printf("cjc\n");
-        // FILE* file = fopen("cjc","w");
-        // char *a = "hello world";
-        // printf("cjc\n");
-        // fwrite(a,sizeof(char),11,file);
-
-        //非正常操作
-        fclose(file);
-        //end of 非正常操作
-        printf("cjc2 out\n");
     }
     if(get_i_flag(mem) == I_FOPEN){
         int mode_flag = ((int*)mem)[1];

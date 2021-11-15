@@ -72,6 +72,7 @@
 
 struct MPI_Status;
 namespace gpu_mpi { 
+}
     struct MPI_Info{
         // todo
     };    
@@ -96,6 +97,6 @@ namespace gpu_mpi {
 
     // see documentation p521
     __device__ int MPI_File_get_position(MPI_File fh, MPI_Offset *offset);
-}
+
 
 #endif

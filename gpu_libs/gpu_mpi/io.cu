@@ -5,8 +5,7 @@
 // #include "mpi.cuh"
 #define N 100
 namespace gpu_mpi {
-
-
+}
     __device__ FILE* __open_file(const char* filename, int mode){
         if(filename == NULL){
             return nullptr;
@@ -144,6 +143,7 @@ namespace gpu_mpi {
         
         __syncthreads();
         *fh = shared_fh;
+        printf("OS file descripter address in open:%p\n",fh->file);
 
         return err_code;
     }
@@ -241,6 +241,14 @@ namespace gpu_mpi {
         // return n;
     }
 
+    //for debug
+    __device__ __host__ void __show_memory(char * mem, size_t size){
+        char *tmem = (char *)mem;
+        for(int i=0;i<size;i+=8){
+            printf("%02X  %02X  %02X  %02X  %02X  %02X  %02X  %02X\n",tmem[i],tmem[i+1],tmem[i+2],tmem[i+3],tmem[i+4],tmem[i+5],tmem[i+6],tmem[i+7]);
+        }
+    }
+
     //not thread safe
     __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
         //TODO: dynamically assign buffer size
@@ -248,20 +256,27 @@ namespace gpu_mpi {
         // int MPI_Type_size(MPI_Datatype datatype, int *size)
         //TODO: MPI_Type_size not implemented
         assert(datatype==MPI_CHAR);
-        assert(buffer_size > sizeof(int*)+sizeof(FILE**)+sizeof(char)*count);
-
+        assert(buffer_size > sizeof(int*)*2+sizeof(FILE**)+sizeof(char)*count);
+        //init
         char* data = (char*) allocate_host_mem(buffer_size);
-        //mem assemble
-        ((int*)data)[0] = I_FWRITE;
-        ((FILE**)data)[1] = fh.file;
-        ((MPI_Datatype*)data)[2] = datatype;
-        memcpy( (void*)((char*)data)[3] , buf, sizeof(char)*count);
+        //assemble
+        *((int*)data) = I_FWRITE;
+        *((int*)(data+4)) = count;
+        // printf("OS file descripter address in MPI_File_write:%p\n", fh.file);
+        *((FILE **)(data+8)) = fh.file;
+        // __show_memory(data, 64);
+        
+
+        *((MPI_Datatype*)(data+16)) = datatype;
+        memcpy( ((const char**)data+24) , buf, sizeof(char)*count);
+
         //execute on CPU
         delegate_to_host((void*)data, buffer_size);
         // wait
         while(((int*)data)[0] != I_READY){};
-        int return_value = ((size_t*)mem)[1];
+        int return_value = ((size_t*)data)[1];
         free_host_mem(data);
+        fh.seek_pos+=return_value;
         //TODO: step 4 error catching
         //#memory cosistency: assuming that write is not reordered with write
         return return_value;
@@ -288,4 +303,4 @@ namespace gpu_mpi {
         //MPI_Barrier(MPI_COMM_WORLD);
         return 0;
     }
-}
+
