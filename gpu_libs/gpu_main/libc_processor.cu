@@ -116,7 +116,9 @@ void process_gpu_libc(void* mem, size_t size) {
         void* buf = ((void**)mem)[3];
         int count = ((int*)mem)[4];
 
-        ((size_t*)mem)[1] = fread(buf, sizeof(datatype), count, file);
+        assert(datatype == MPI_CHAR);  // TODO: adapt to different datatypes
+        ((size_t*)mem)[1] = fread(buf, 1, count, file);
+        // ((FILE**)mem)[1] = file;
         // p507 l42
         // nb. fread() forwards the file pointer, so no need to manually forward it.
         

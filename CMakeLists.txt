@@ -29,7 +29,7 @@ add_subdirectory(scripts)
 include(CTest) # enables Dashboard actions support 
 enable_testing()
 add_subdirectory(tests)
-add_subdirectory(toolchain_tests)
+# add_subdirectory(toolchain_tests)
 
 export(TARGETS 
     gpu_libs
