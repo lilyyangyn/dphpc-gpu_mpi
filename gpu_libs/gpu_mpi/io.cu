@@ -139,6 +139,11 @@ namespace gpu_mpi {
                 init_pos = __get_file_size(shared_fh.file);
             }
             memset(shared_fh.seek_pos, init_pos, sizeof(int) * size);
+
+            // TODO: allocate and initialize buffer array, status array, size
+            shared_fh.num_blocks = 10;
+            shared_fh.buffer = (void**)malloc(shared_fh.num_blocks * sizeof(void*));
+            shared_fh.status = (int*)malloc(shared_fh.num_blocks * sizeof(int));
         }
         
         __syncthreads();
@@ -292,12 +297,34 @@ namespace gpu_mpi {
 
         // only free the file handle object once
         if(rank == 0){
+            // TODO: if fh->amode is MPI_MODE_DELETE_ON_CLOSE, need to delete that file
+            if(fh->amode == MPI_MODE_DELETE_ON_CLOSE){
+                ;
+            }
+
             // close the file associated with file handle
-            // fclose(fh->file);
             __close_file(fh->file);
             
             // release the fh object
             free(fh->seek_pos);
+
+            // TODO: check status of buffer blocks, write dirty blocks back
+            for(int i = 0; i < fh->num_blocks; i++){
+                if(fh->status[i] == BLOCK_IN_DIRTY){
+                    // TODO: write back
+                }
+            }
+
+            // TODO: release buffer array
+            for(int i = 0; i < fh->num_blocks; i++){
+                if(fh->status[i] != BLOCK_NOT_IN)
+                    free(fh->buffer + i);
+            }
+            free(fh->buffer);
+
+            // TODO: release status array
+            free(fh->status);
+            fh->num_blocks = 0;
         }
         __syncthreads();
         //MPI_Barrier(MPI_COMM_WORLD);

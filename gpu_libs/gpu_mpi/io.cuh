@@ -70,6 +70,11 @@
 #define I_FOPEN_MODE_RW_APPEND 3
 #define I_FOPEN_MODE_WD_APPEND 4
 
+#define BLOCK_NOT_IN       0
+#define BLOCK_IN_CLEAN     1
+#define BLOCK_IN_DIRTY     2
+
+
 struct MPI_Status;
 namespace gpu_mpi { 
 }
@@ -78,11 +83,13 @@ namespace gpu_mpi {
     };    
     
     struct MPI_File{
-        MPI_Comm comm;
-        int* seek_pos;
-        int amode;
-        FILE* file;
-        // todo
+        MPI_Comm    comm;
+        int*        seek_pos;
+        int         amode;
+        FILE*       file;
+        void**      buffer; // points to the buffer of the file blocks
+        int*        status; // status of each block: NOT_IN/ CLEAN/ DIRTY
+        int         num_blocks;   // number of blocks
     };
 
     // see documentation p493
