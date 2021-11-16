@@ -143,7 +143,6 @@ namespace gpu_mpi {
         
         __syncthreads();
         *fh = shared_fh;
-        printf("OS file descripter address in open:%p\n",fh->file);
 
         return err_code;
     }
@@ -244,7 +243,7 @@ namespace gpu_mpi {
     //for debug
     __device__ __host__ void __show_memory(char * mem, size_t size){
         char *tmem = (char *)mem;
-        for(int i=0;i<size;i+=8){
+        for(int i=0;i+7<size;i+=8){
             printf("%02X  %02X  %02X  %02X  %02X  %02X  %02X  %02X\n",tmem[i],tmem[i+1],tmem[i+2],tmem[i+3],tmem[i+4],tmem[i+5],tmem[i+6],tmem[i+7]);
         }
     }
@@ -274,9 +273,13 @@ namespace gpu_mpi {
         delegate_to_host((void*)data, buffer_size);
         // wait
         while(((int*)data)[0] != I_READY){};
-        int return_value = ((size_t*)data)[1];
+        int return_value = (int) *((size_t*)(data+8));
+        
+        int rank;
+        MPI_Comm_rank(fh.comm, &rank);
+        //assuming individual file pointer, but how does shared pointer differ from this?
+        // fh.seek_pos[rank]+=return_value;
         free_host_mem(data);
-        fh.seek_pos+=return_value;
         //TODO: step 4 error catching
         //#memory cosistency: assuming that write is not reordered with write
         return return_value;
