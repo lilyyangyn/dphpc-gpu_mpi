@@ -56,13 +56,14 @@
 #define MPI_Offset      int
 #define MPI_FILE_NULL nullptr
 
-#define I_READY  0
-#define I_FSEEK  1
-#define I_FFLUSH 2
-#define I_FCLOSE 3
-#define I_FREAD  4
-#define I_FWRITE 5
-#define I_FOPEN  6
+#define I_READY     0
+#define I_FSEEK     1
+#define I_FFLUSH    2
+#define I_FCLOSE    3
+#define I_FREAD     4
+#define I_FWRITE    5
+#define I_FOPEN     6
+#define I_FDELETE   7
 
 #define I_FOPEN_MODE_RD        0
 #define I_FOPEN_MODE_RW        1
@@ -90,6 +91,7 @@ namespace gpu_mpi {
         void**      buffer; // points to the buffer of the file blocks
         int*        status; // status of each block: NOT_IN/ CLEAN/ DIRTY
         int         num_blocks;   // number of blocks
+        const char* filename;
     };
 
     // see documentation p493

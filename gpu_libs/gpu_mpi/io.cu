@@ -87,6 +87,7 @@ namespace gpu_mpi {
 
             // initialize fh->file
             shared_fh.file = __open_file(filename, I_FOPEN_MODE_RD);
+            shared_fh.filename = filename;
 
             // check file existence
             if(shared_fh.file == NULL){
@@ -143,7 +144,11 @@ namespace gpu_mpi {
             // TODO: allocate and initialize buffer array, status array, size
             shared_fh.num_blocks = 10;
             shared_fh.buffer = (void**)malloc(shared_fh.num_blocks * sizeof(void*));
+            for(int i = 0; i < shared_fh.num_blocks; i++){
+                shared_fh.buffer[i] = nullptr;
+            }
             shared_fh.status = (int*)malloc(shared_fh.num_blocks * sizeof(int));
+            memset(shared_fh.status, BLOCK_NOT_IN, shared_fh.num_blocks * sizeof(int));
         }
         
         __syncthreads();
@@ -287,6 +292,26 @@ namespace gpu_mpi {
         return return_value;
     }
 
+    __device__ void __delete_file(const char* filename){
+        if(filename == NULL){
+            return;
+        }
+        // TODO: ask cpu to remove the file
+        int buffer_size = 128;
+        char* data = (char*) allocate_host_mem(buffer_size);
+
+        ((int*)data)[0] = I_FDELETE;
+        // remove the file associated with filename
+        int filename_size = 0;
+        while (filename[filename_size] != '\0') filename_size++;
+        memcpy((const char**)data + 1, filename, filename_size + 1);
+        printf("C\n");
+        delegate_to_host((void*)data, buffer_size);
+        // wait
+        while(((int*)data)[0] != I_READY){};
+        //file remove done
+        free_host_mem(data);
+    }
 
     __device__ int MPI_File_close(MPI_File *fh){
         // synchronize file state
@@ -325,6 +350,7 @@ namespace gpu_mpi {
             // TODO: release status array
             free(fh->status);
             fh->num_blocks = 0;
+            fh->filename = nullptr;
         }
         __syncthreads();
         //MPI_Barrier(MPI_COMM_WORLD);
