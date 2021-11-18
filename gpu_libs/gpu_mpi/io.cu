@@ -200,8 +200,29 @@ namespace gpu_mpi {
         return 0;
     }
 
-    __device__ int __read_block(MPI_File* fh, int block_index, int start, int count, void* buf){
+    __device__ void __read_block(MPI_File* fh, int block_index, int start, int count, void* buf){
         // check whether the whole block is in buffer
+        if(fh->status[block_index] == BLOCK_NOT_IN){
+            // data not in buffer, read to from cpu
+
+            fh->buffer[block_index] = allocate_host_mem(INIT_BUFFER_BLOCK_SIZE);
+
+            int buffer_size = 128;
+            char* data = (char*) allocate_host_mem(buffer_size);
+            ((int*)data)[0] = I_FREAD;
+            ((FILE**)data)[1] = fh->file;
+            ((void**)data)[2] = fh->buffer[block_index];
+            delegate_to_host((void*)data, buffer_size);
+            // wait
+            while(((int*)data)[0] != I_READY){};
+            free_host_mem(data);
+            
+        }
+
+        // data in buffer
+        void* buffer_start = fh->buffer[block_index];
+        buffer_start = (char*)buffer_start + start;
+        memcpy(buf, buffer_start, count);        
     }
 
     __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
@@ -216,23 +237,18 @@ namespace gpu_mpi {
         int cur_block = cur_pos / INIT_BUFFER_BLOCK_SIZE;
         int block_offset = cur_pos % INIT_BUFFER_BLOCK_SIZE;
 
-        int buffer_size = sizeof(int) + sizeof(FILE*) + sizeof(MPI_Datatype) + sizeof(void*) + sizeof(int) + 2048;  // (TODO: dynamic size) sizeof(datatype) * count;
-        void* data = (void*)allocate_host_mem(buffer_size);
-        ((int*)data)[0] = I_FREAD;
-        ((FILE**)data)[1] = fh.file;
-        ((MPI_Datatype*)data)[2] = datatype;
-        ((void**)data)[3] = (void**)data + 5;  // buf;
-        ((int*)data)[4] = count;
-        
-        delegate_to_host((void*)data, buffer_size);
-        while (((int*)data)[0] != I_READY)
-        {
-            // blocking wait (p506 l44)
+        // for now only support read the whole block
+        assert(block_offset == 0);
+        assert(count % INIT_BUFFER_BLOCK_SIZE == 0);
+        int num_block = count / INIT_BUFFER_BLOCK_SIZE;
+        for(int i=0;i<num_block;i++){
+            void* buf_start = ((char*)buf) + i * INIT_BUFFER_BLOCK_SIZE;
+            __read_block(&fh, cur_block + i, 0, INIT_BUFFER_BLOCK_SIZE, buf_start);
         }
 
-        memcpy(buf, (void**)data + 5, sizeof(datatype) * count);
-        free_host_mem(data);
-        return ((size_t*)data)[1];
+        // assume we always can read count data
+        fh.seek_pos[rank] += count;
+        return count;
     }
     
     __device__ int __howManyBits(int x) {
