@@ -200,24 +200,26 @@ namespace gpu_mpi {
         return 0;
     }
 
+    __device__ void __read_file(MPI_File* fh, int block_index, int seekpos){
+        int buffer_size = 128;
+        char* data = (char*) allocate_host_mem(buffer_size);
+        ((int*)data)[0] = I_FREAD;
+        ((FILE**)data)[1] = fh->file;
+        ((void**)data)[2] = fh->buffer[block_index];
+        ((int*)data)[6] = seekpos;
+        delegate_to_host((void*)data, buffer_size);
+        // wait
+        while(((int*)data)[0] != I_READY){};
+        free_host_mem(data);
+    }
+    
     __device__ void __read_block(MPI_File* fh, int block_index, int start, int count, void* buf, int seekpos){
         // check whether the whole block is in buffer
         if(fh->status[block_index] == BLOCK_NOT_IN){
             // data not in buffer, read to from cpu
-
             fh->buffer[block_index] = allocate_host_mem(INIT_BUFFER_BLOCK_SIZE);
-
-            int buffer_size = 128;
-            char* data = (char*) allocate_host_mem(buffer_size);
-            ((int*)data)[0] = I_FREAD;
-            ((FILE**)data)[1] = fh->file;
-            ((void**)data)[2] = fh->buffer[block_index];
-            ((int*)data)[6] = seekpos;
-            delegate_to_host((void*)data, buffer_size);
-            // wait
-            while(((int*)data)[0] != I_READY){};
-            free_host_mem(data);
-            fh->status[block_index] == BLOCK_IN_CLEAN;
+            __read_file(fh, block_index, seekpos);
+            fh->status[block_index] = BLOCK_IN_CLEAN;
         }
 
         // data in buffer
@@ -289,23 +291,22 @@ namespace gpu_mpi {
         }
     }
 
-    //not thread safe
-    __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
+    // TODO: ask CPU to write the buffer back to disk
+    // NOT DONE YET!!
+    __device__ int __write_file(MPI_File* fh, int count, const void* buf, MPI_Datatype datatype){
         //TODO: dynamically assign buffer size
         int buffer_size = 2048;
         // int MPI_Type_size(MPI_Datatype datatype, int *size)
         //TODO: MPI_Type_size not implemented
-        assert(datatype==MPI_CHAR);
-        assert(buffer_size > sizeof(int*)*2+sizeof(FILE**)+sizeof(char)*count);
+        assert(buffer_size > sizeof(int*) * 2 + sizeof(FILE**) + sizeof(char) * count);
         //init
         char* data = (char*) allocate_host_mem(buffer_size);
         //assemble
         *((int*)data) = I_FWRITE;
         *((int*)(data+4)) = count;
         // printf("OS file descripter address in MPI_File_write:%p\n", fh.file);
-        *((FILE **)(data+8)) = fh.file;
+        *((FILE **)(data+8)) = fh->file;
         // __show_memory(data, 64);
-        
 
         *((MPI_Datatype*)(data+16)) = datatype;
         memcpy( ((const char**)data+24) , buf, sizeof(char)*count);
@@ -315,17 +316,75 @@ namespace gpu_mpi {
         // wait
         while(((int*)data)[0] != I_READY){};
         int return_value = (int) *((size_t*)(data+8));
-        
-        int rank;
-        MPI_Comm_rank(fh.comm, &rank);
-        //assuming individual file pointer, but how does shared pointer differ from this?
-        // fh.seek_pos[rank]+=return_value;
-        free_host_mem(data);
-        //TODO: step 4 error catching
-        //#memory cosistency: assuming that write is not reordered with write
+
         return return_value;
     }
 
+    __device__ void __write_block(MPI_File* fh, int block_index, int start, int count, const void* buf, int seekpos){
+        // TODO: check if block_index > num_blocks and whether need to allocate more buffer
+
+        // for now only support read the whole block
+        // check whether the whole block is in buffer
+        if(fh->status[block_index] == BLOCK_NOT_IN){
+            // data not in buffer, read to from cpu
+            fh->buffer[block_index] = allocate_host_mem(INIT_BUFFER_BLOCK_SIZE);
+            __read_file(fh, block_index, seekpos);
+            fh->status[block_index] = BLOCK_IN_CLEAN;
+        }
+
+        // write buffer
+        void* buffer_start = fh->buffer[block_index];
+        buffer_start = (char*)buffer_start + start;
+        memcpy(buffer_start, buf, count);
+        fh->status[block_index] = BLOCK_IN_DIRTY;
+    }
+
+    __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
+        // TODO: check amode
+        // TODO: Only one thread can get access 
+
+        assert(datatype == MPI_CHAR);
+        // write into buffer
+        int rank;
+        MPI_Comm_rank(fh.comm, &rank);
+        int cur_pos = fh.seek_pos[rank];
+        int cur_block = cur_pos / INIT_BUFFER_BLOCK_SIZE;
+        int block_offset = cur_pos % INIT_BUFFER_BLOCK_SIZE;
+        int num_block = 1 + (count - (INIT_BUFFER_BLOCK_SIZE - block_offset)) / INIT_BUFFER_BLOCK_SIZE;
+
+        // pointer to the buf we are reading from
+        const void* buf_start = buf;
+        int remain_count = count;
+        int seekpos = cur_pos;
+        // need to write partial of the first block
+        if(block_offset != 0){
+            __write_block(&fh, cur_block, block_offset, INIT_BUFFER_BLOCK_SIZE - block_offset, buf_start, seekpos);
+            // check if this += is correct!!!!!!!!!!!!!!!!!!!!!!!!!
+            buf_start = (const char*)buf_start + INIT_BUFFER_BLOCK_SIZE - block_offset;
+            seekpos += INIT_BUFFER_BLOCK_SIZE - block_offset;
+            cur_block += 1;
+            num_block -= 1;
+            remain_count -= INIT_BUFFER_BLOCK_SIZE - block_offset;
+        }
+
+        // Is it alright to mix size and count here? what if the MPI_Datatype is double, whose size is not 1 as char?
+        for(int i = 0; i < num_block; i++){
+            size_t write_size = INIT_BUFFER_BLOCK_SIZE;
+            size_t write_buffer_offset = 0;
+            // need to write partial of the last block
+            if(i == num_block - 1){
+                write_size = remain_count - i * INIT_BUFFER_BLOCK_SIZE;
+            }
+            __write_block(&fh, cur_block + i, write_buffer_offset, write_size, buf_start, seekpos);
+            buf_start = (const char*)buf_start + INIT_BUFFER_BLOCK_SIZE;
+            seekpos += INIT_BUFFER_BLOCK_SIZE;
+        }
+
+        // assume we can always write count data
+        fh.seek_pos[rank] += count;
+        return count;
+    }
+    
     __device__ void __delete_file(const char* filename){
         if(filename == NULL){
             return;
@@ -360,28 +419,26 @@ namespace gpu_mpi {
             if(fh->amode == MPI_MODE_DELETE_ON_CLOSE){
                 ;
             }
-
             // close the file associated with file handle
             __close_file(fh->file);
-            
             // release the fh object
             free(fh->seek_pos);
-
             // TODO: check status of buffer blocks, write dirty blocks back
             int num_blocks = *(fh->num_blocks);
             for(int i = 0; i < num_blocks; i++){
                 if(fh->status[i] == BLOCK_IN_DIRTY){
+                    ;
                     // TODO: write back
+                    // __write_file();
+                    // fh->status[i] = BLOCK_IN_CLEAN;
                 }
             }
-
             // TODO: release buffer array
             for(int i = 0; i < num_blocks; i++){
                 if(fh->status[i] != BLOCK_NOT_IN)
-                    free(fh->buffer + i);
+                    free(fh->buffer[i]);
             }
             free(fh->buffer);
-
             // TODO: release status array
             free(fh->status);
             free(fh->num_blocks);
