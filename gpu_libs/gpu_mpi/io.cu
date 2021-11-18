@@ -130,7 +130,8 @@ namespace gpu_mpi {
             // initialize fh->seek_pos
             // TODO: MPI_MODE_UNIQUE_OPEN -> Only one seek_pos???
             int size;
-            MPI_Comm_rank(comm, &size);
+            MPI_Comm_size(comm, &size);
+            // assert(size == 1);
             fh->seek_pos = (int*)malloc(size*sizeof(int));
             int init_pos = 0;
             if(amode & MPI_MODE_APPEND){
@@ -138,7 +139,11 @@ namespace gpu_mpi {
                 // see documentation p494 line 42
                 init_pos = __get_file_size(shared_fh.file);
             }
-            memset(shared_fh.seek_pos, init_pos, sizeof(int) * size);
+            // init_pos = 1;
+            for (int i = 0; i < size; i++){
+                fh->seek_pos[i] = init_pos;
+            }
+            // assert(fh->seek_pos[0] == 1);
         }
         
         __syncthreads();
