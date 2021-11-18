@@ -144,10 +144,11 @@ namespace gpu_mpi {
             }
 
             // TODO: allocate and initialize buffer array, status array, size
-            shared_fh.num_blocks = INIT_BUFFER_BLOCK_NUM;
-            shared_fh.buffer = (void**)malloc(shared_fh.num_blocks * sizeof(void*));
-            shared_fh.status = (int*)malloc(shared_fh.num_blocks * sizeof(int));
-            for(int i = 0; i < shared_fh.num_blocks; i++){
+            shared_fh.num_blocks = (int*)malloc(sizeof(int));
+            *(shared_fh.num_blocks) = INIT_BUFFER_BLOCK_NUM;
+            shared_fh.buffer = (void**)malloc(INIT_BUFFER_BLOCK_NUM * sizeof(void*));
+            shared_fh.status = (int*)malloc(INIT_BUFFER_BLOCK_NUM * sizeof(int));
+            for(int i = 0; i < INIT_BUFFER_BLOCK_NUM; i++){
                 shared_fh.buffer[i] = nullptr;
                 shared_fh.status[i] = BLOCK_NOT_IN;
             }
@@ -199,13 +200,21 @@ namespace gpu_mpi {
         return 0;
     }
 
+    __device__ int __read_block(MPI_File* fh, int block_index, int start, int count, void* buf){
+        // check whether the whole block is in buffer
+    }
+
     __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
         if (!(fh.amode & MPI_MODE_RDONLY) && !(fh.amode & MPI_MODE_RDWR)) return MPI_ERR_AMODE;
         if (fh.amode & MPI_MODE_SEQUENTIAL) return MPI_ERR_UNSUPPORTED_OPERATION;  // p514 l43
         // TODO: Only one thread with RDWR can gain access; unlimited threads with RDONLY can gain access (?)
         // TODO: write into MPI_Status
 
-
+        int rank;
+        MPI_Comm_rank(fh.comm, &rank);
+        int cur_pos = fh.seek_pos[rank];
+        int cur_block = cur_pos / INIT_BUFFER_BLOCK_SIZE;
+        int block_offset = cur_pos % INIT_BUFFER_BLOCK_SIZE;
 
         int buffer_size = sizeof(int) + sizeof(FILE*) + sizeof(MPI_Datatype) + sizeof(void*) + sizeof(int) + 2048;  // (TODO: dynamic size) sizeof(datatype) * count;
         void* data = (void*)allocate_host_mem(buffer_size);
@@ -341,14 +350,15 @@ namespace gpu_mpi {
             free(fh->seek_pos);
 
             // TODO: check status of buffer blocks, write dirty blocks back
-            for(int i = 0; i < fh->num_blocks; i++){
+            int num_blocks = *(fh->num_blocks);
+            for(int i = 0; i < num_blocks; i++){
                 if(fh->status[i] == BLOCK_IN_DIRTY){
                     // TODO: write back
                 }
             }
 
             // TODO: release buffer array
-            for(int i = 0; i < fh->num_blocks; i++){
+            for(int i = 0; i < num_blocks; i++){
                 if(fh->status[i] != BLOCK_NOT_IN)
                     free(fh->buffer + i);
             }
@@ -356,9 +366,9 @@ namespace gpu_mpi {
 
             // TODO: release status array
             free(fh->status);
-            fh->num_blocks = 0;
+            free(fh->num_blocks);
             fh->filename = nullptr;
-        }gpu_libs/gpu_mpi/io.cu
+        }
 
         __syncthreads();
         //MPI_Barrier(MPI_COMM_WORLD);

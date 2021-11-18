@@ -76,7 +76,7 @@
 #define BLOCK_IN_DIRTY     2
 
 #define INIT_BUFFER_BLOCK_NUM   10
-#define INIT_BUFFER_BLOCK_SIZE  1048576
+#define INIT_BUFFER_BLOCK_SIZE  64
 
 
 struct MPI_Status;
@@ -93,7 +93,7 @@ namespace gpu_mpi {
         FILE*       file;
         void**      buffer; // points to the buffer of the file blocks
         int*        status; // status of each block: NOT_IN/ CLEAN/ DIRTY
-        int         num_blocks;   // number of blocks
+        int*        num_blocks;   // number of blocks
         const char* filename;
     };
 
