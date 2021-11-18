@@ -188,28 +188,41 @@ namespace gpu_mpi {
     }
 
     __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
+        // nb. buf is in device's address space, cannot be accessed directly by host
+
         if (!(fh.amode & MPI_MODE_RDONLY) && !(fh.amode & MPI_MODE_RDWR)) return MPI_ERR_AMODE;
         if (fh.amode & MPI_MODE_SEQUENTIAL) return MPI_ERR_UNSUPPORTED_OPERATION;  // p514 l43
         // TODO: Only one thread with RDWR can gain access; unlimited threads with RDONLY can gain access (?)
         // TODO: write into MPI_Status
 
-        int buffer_size = sizeof(int) + sizeof(FILE*) + sizeof(MPI_Datatype) + sizeof(void*) + sizeof(int) + 2048;  // (TODO: dynamic size) sizeof(datatype) * count;
-        void* data = (void*)allocate_host_mem(buffer_size);
-        ((int*)data)[0] = I_FREAD;
-        ((FILE**)data)[1] = fh.file;
-        ((MPI_Datatype*)data)[2] = datatype;
-        ((void**)data)[3] = (void**)data + 5;  // buf;
-        ((int*)data)[4] = count;
+        assert(datatype == MPI_CHAR);  // TODO: adapt to different datatypes
+        int buffer_size = 2048;  // sizeof(int) + sizeof(r_param) + sizeof(char) * (count + 1);: misaligned address
+          // (TODO: dynamic size) sizeof(datatype) * (count + 1);
+        char* data = (char*)allocate_host_mem(buffer_size);
+        if (data == nullptr) return 0;
+
+        struct rw_params {
+            MPI_File fh;
+            MPI_Datatype datatype;
+            void* buf;
+            int count;
+        } r_param;
+        r_param.fh = fh;  r_param.datatype = datatype;  r_param.count = count;
+        r_param.buf = data + sizeof(int) + sizeof(r_param);  // CPU cannot directly write into buf, so write into mem first
+        *((int*)data) = I_FREAD;
+        *((rw_params*)(data + sizeof(int))) = r_param;
         
-        delegate_to_host((void*)data, buffer_size);
-        while (((int*)data)[0] != I_READY)
+        delegate_to_host(data, buffer_size);
+        while (*((int*)data) != I_READY)
         {
             // blocking wait (p506 l44)
         }
 
-        memcpy(buf, (void**)data + 5, sizeof(datatype) * count);
+        memcpy(buf, r_param.buf, count);  // sizeof(datatype) * count);
+        size_t ret = ((size_t*)data)[1];
+        if (fh.seek_pos != nullptr) *(fh.seek_pos) += ret;  // TODO fh.seek_pos shouldn't be nullptr. Why it is?
         free_host_mem(data);
-        return ((size_t*)data)[1];
+        return ret;
     }
     
     __device__ int __howManyBits(int x) {

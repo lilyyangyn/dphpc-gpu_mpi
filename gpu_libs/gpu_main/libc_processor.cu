@@ -99,14 +99,14 @@ void process_gpu_libc(void* mem, size_t size) {
     }
     if(get_i_flag(mem) == I_FREAD){
         // This param order is in accordance with FWRITE
-        FILE* file = ((FILE**)mem)[1];
-        MPI_Datatype datatype = ((MPI_Datatype*)mem)[2];
-        void* buf = ((void**)mem)[3];
-        int count = ((int*)mem)[4];
+        struct rw_params {
+            MPI_File fh;
+            MPI_Datatype datatype;
+            void* buf;
+            int count;
+        } r_param = *((rw_params*)((char*)mem + sizeof(int)));
 
-        assert(datatype == MPI_CHAR);  // TODO: adapt to different datatypes
-        ((size_t*)mem)[1] = fread(buf, 1, count, file);
-        // ((FILE**)mem)[1] = file;
+        ((size_t*)mem)[1] = fread(r_param.buf, sizeof(char), r_param.count, r_param.fh.file);
         // p507 l42
         // nb. fread() forwards the file pointer, so no need to manually forward it.
         
