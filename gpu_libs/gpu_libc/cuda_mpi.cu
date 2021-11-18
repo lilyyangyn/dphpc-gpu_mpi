@@ -531,9 +531,8 @@ __host__ __device__ void* FreeManagedMemory::allocate(size_t size) {
         BlockDescriptor* memBlock = (BlockDescriptor*)(&buffer[blockStart]);
         size_t blockDataStart = blockStart + sizeof(BlockDescriptor);
         assert(memBlock->end > blockStart);
-        size_t blockUsefulSize = memBlock->end - blockStart;
-
         compactionWithNextBlocks(blockStart);
+        size_t blockUsefulSize = memBlock->end - blockStart;
 
         if (memBlock->status == FREE && blockUsefulSize >= size) {
             // allocate block
@@ -590,6 +589,10 @@ __host__ __device__ void FreeManagedMemory::free(void* ptr) {
 
 __host__ __device__ void FreeManagedMemory::compactionWithNextBlocks(size_t currentBlock) {
     BlockDescriptor* current = (BlockDescriptor*)(&buffer[currentBlock]);
+
+    if(current->status == USED){
+        return;
+    }
 
     while (true) {
         size_t nextBlock = current->end;
