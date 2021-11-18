@@ -104,46 +104,44 @@ namespace gpu_mpi {
 
             if(err_code != 0) {
                 __close_file(shared_fh.file);
-                __syncthreads();
-                return err_code;
-            }
-
-            if(!(amode & MPI_MODE_RDONLY)){
-                __close_file(shared_fh.file);
-                int mode;
-                if(amode & MPI_MODE_RDWR){
-                    if(amode & MPI_MODE_APPEND) {
-                        mode = I_FOPEN_MODE_RW_APPEND;
-                    }else{
-                        mode = I_FOPEN_MODE_RW;
+            }else{
+                if(!(amode & MPI_MODE_RDONLY)){
+                    __close_file(shared_fh.file);
+                    int mode;
+                    if(amode & MPI_MODE_RDWR){
+                        if(amode & MPI_MODE_APPEND) {
+                            mode = I_FOPEN_MODE_RW_APPEND;
+                        }else{
+                            mode = I_FOPEN_MODE_RW;
+                        }
+                    }else if(amode & MPI_MODE_WRONLY){
+                        if(amode & MPI_MODE_APPEND) {
+                            mode = I_FOPEN_MODE_WD_APPEND;
+                        }else{
+                            mode = I_FOPEN_MODE_WD;
+                        }
                     }
-                }else if(amode & MPI_MODE_WRONLY){
-                    if(amode & MPI_MODE_APPEND) {
-                        mode = I_FOPEN_MODE_WD_APPEND;
-                    }else{
-                        mode = I_FOPEN_MODE_WD;
-                    }
+                    shared_fh.file = __open_file(filename, mode);
                 }
-                shared_fh.file = __open_file(filename, mode);
-            }
-            
-            // initialize fh->seek_pos
-            // TODO: MPI_MODE_UNIQUE_OPEN -> Only one seek_pos???
-            int size;
-            MPI_Comm_size(comm, &size);
-            // assert(size == 1);
-            fh->seek_pos = (int*)malloc(size*sizeof(int));
-            int init_pos = 0;
-            if(amode & MPI_MODE_APPEND){
-                // In append mode: set pointer to end of file 
-                // see documentation p494 line 42
-                init_pos = __get_file_size(shared_fh.file);
-            }
-            // init_pos = 1;
-            for (int i = 0; i < size; i++){
-                fh->seek_pos[i] = init_pos;
-            }
-            // assert(fh->seek_pos[0] == 1);
+                
+                // initialize fh->seek_pos
+                // TODO: MPI_MODE_UNIQUE_OPEN -> Only one seek_pos???
+                int size;
+                MPI_Comm_size(comm, &size);
+                // assert(size == 1);
+                fh->seek_pos = (int*)malloc(size*sizeof(int));
+                int init_pos = 0;
+                if(amode & MPI_MODE_APPEND){
+                    // In append mode: set pointer to end of file 
+                    // see documentation p494 line 42
+                    init_pos = __get_file_size(shared_fh.file);
+                }
+                // init_pos = 1;
+                for (int i = 0; i < size; i++){
+                    fh->seek_pos[i] = init_pos;
+                }
+                // assert(fh->seek_pos[0] == 1);
+            }   
         }
         
         __syncthreads();
