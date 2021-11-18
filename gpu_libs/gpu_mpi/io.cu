@@ -144,7 +144,7 @@ namespace gpu_mpi {
             }
 
             // TODO: allocate and initialize buffer array, status array, size
-            shared_fh.num_blocks = INIT_BUFFER_BLOCK_SIZE;
+            shared_fh.num_blocks = INIT_BUFFER_BLOCK_NUM;
             shared_fh.buffer = (void**)malloc(shared_fh.num_blocks * sizeof(void*));
             shared_fh.status = (int*)malloc(shared_fh.num_blocks * sizeof(int));
             for(int i = 0; i < shared_fh.num_blocks; i++){
@@ -204,6 +204,8 @@ namespace gpu_mpi {
         if (fh.amode & MPI_MODE_SEQUENTIAL) return MPI_ERR_UNSUPPORTED_OPERATION;  // p514 l43
         // TODO: Only one thread with RDWR can gain access; unlimited threads with RDONLY can gain access (?)
         // TODO: write into MPI_Status
+
+
 
         int buffer_size = sizeof(int) + sizeof(FILE*) + sizeof(MPI_Datatype) + sizeof(void*) + sizeof(int) + 2048;  // (TODO: dynamic size) sizeof(datatype) * count;
         void* data = (void*)allocate_host_mem(buffer_size);
@@ -356,7 +358,8 @@ namespace gpu_mpi {
             free(fh->status);
             fh->num_blocks = 0;
             fh->filename = nullptr;
-        }
+        }gpu_libs/gpu_mpi/io.cu
+
         __syncthreads();
         //MPI_Barrier(MPI_COMM_WORLD);
         return 0;
