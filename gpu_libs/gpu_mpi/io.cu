@@ -200,7 +200,7 @@ namespace gpu_mpi {
         return 0;
     }
 
-    __device__ void __read_block(MPI_File* fh, int block_index, int start, int count, void* buf){
+    __device__ void __read_block(MPI_File* fh, int block_index, int start, int count, void* buf, int seekpos){
         // check whether the whole block is in buffer
         if(fh->status[block_index] == BLOCK_NOT_IN){
             // data not in buffer, read to from cpu
@@ -212,11 +212,12 @@ namespace gpu_mpi {
             ((int*)data)[0] = I_FREAD;
             ((FILE**)data)[1] = fh->file;
             ((void**)data)[2] = fh->buffer[block_index];
+            ((int*)data)[6] = seekpos;
             delegate_to_host((void*)data, buffer_size);
             // wait
             while(((int*)data)[0] != I_READY){};
             free_host_mem(data);
-            
+            fh->status[block_index] == BLOCK_IN_CLEAN;
         }
 
         // data in buffer
@@ -243,7 +244,8 @@ namespace gpu_mpi {
         int num_block = count / INIT_BUFFER_BLOCK_SIZE;
         for(int i=0;i<num_block;i++){
             void* buf_start = ((char*)buf) + i * INIT_BUFFER_BLOCK_SIZE;
-            __read_block(&fh, cur_block + i, 0, INIT_BUFFER_BLOCK_SIZE, buf_start);
+            int seekpos = cur_pos + i * INIT_BUFFER_BLOCK_SIZE;
+            __read_block(&fh, cur_block + i, 0, INIT_BUFFER_BLOCK_SIZE, buf_start, seekpos);
         }
 
         // assume we always can read count data
