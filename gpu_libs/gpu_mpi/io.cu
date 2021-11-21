@@ -312,7 +312,8 @@ namespace gpu_mpi {
 
     __device__ int MPI_File_close(MPI_File *fh){
         // synchronize file state
-        __syncthreads();
+        // __syncthreads();
+        MPI_Barrier(MPI_COMM_WORLD);
 
         int rank;
         MPI_Comm_rank(fh->comm, &rank);
@@ -321,13 +322,14 @@ namespace gpu_mpi {
         if(rank == 0){
             // close the file associated with file handle
             // fclose(fh->file);
-            __close_file(fh->file);
             
             // release the fh object
             free(fh->seek_pos);
+
+            __close_file(fh->file);
         }
-        __syncthreads();
-        //MPI_Barrier(MPI_COMM_WORLD);
+        // __syncthreads();
+        MPI_Barrier(MPI_COMM_WORLD);
         return 0;
     }
 
