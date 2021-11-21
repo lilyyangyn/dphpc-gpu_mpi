@@ -75,11 +75,11 @@ namespace gpu_mpi {
     }
 
 
-    __device__ int err_code;
     __device__ MPI_File shared_fh;
     __device__ int MPI_File_open(MPI_Comm comm, const char *filename, int amode, MPI_Info info, MPI_File *fh){
         // __shared__ int err_code;
         // __shared__ MPI_File shared_fh;   
+        int err_code;
 
         // create MPI_FILE
         int rank;
@@ -180,6 +180,7 @@ namespace gpu_mpi {
         MPI_Barrier(MPI_COMM_WORLD); 
         // __syncthreads(); 
         // printf("rank %d, Second\n", rank);
+        MPI_Bcast(&err_code, 1, MPI_INT, 0, MPI_COMM_WORLD);
         *fh = shared_fh;
 
         return err_code;
@@ -474,4 +475,20 @@ namespace gpu_mpi {
         MPI_Barrier(MPI_COMM_WORLD);
         return 0;
     }
+
+    __device__ int MPI_File_get_size(MPI_File fh, MPI_Offset *size){
+        int sz; 
+
+        int rank;
+        MPI_Comm_rank(fh.comm, &rank);
+        if(rank == 0){
+            sz = __get_file_size(fh.file);
+        }
+
+        MPI_Barrier(MPI_COMM_WORLD);
+        MPI_Bcast(&sz, 1, MPI_INT, 0, MPI_COMM_WORLD);
+        *size = sz;
+
+        return 0;
+    } 
 
