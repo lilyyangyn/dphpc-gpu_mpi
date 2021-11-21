@@ -13,43 +13,6 @@ void set_i_ready_flag(void* mem){
 }
 
 void process_gpu_libc(void* mem, size_t size) {
-    // intend to change to switch-case statement, but need to inform everyone to remember break;
-    // switch(get_i_flag(mem)){
-    //     case I_FSEEK: {
-    //         FILE* file = ((FILE**)mem)[1];
-    //         // todo: is lock needed?
-    //         fseek(file, 0L, SEEK_END);
-    //         ((long int*)mem)[1] = ftell(file);
-    //         set_i_ready_flag(mem);
-    //         return; //intentionally use return instead of break
-    //     }
-    //     case I_FWRITE: {
-    //         FILE* file = ((FILE**)mem)[1]; // encoded FILE* retrieve with (FILE* )*
-    //         MPI_Datatype* datatype = ((MPI_Datatype*)mem)[2];
-    //         //TODO: MPI_Type_size not implemented
-    //         assert(datatype==MPI_CHAR);
-    //         fwrite( ((char*)mem)[3], sizeof(char), size-sizeof(MPI_Datatype*)-sizeof(FILE*)-sizeof(int*), file);
-    //         // printf("cjc\n");
-    //         // FILE* file = fopen("cjc","w");
-    //         // char *a = "hello world";
-    //         // printf("cjc\n");
-    //         // fwrite(a,sizeof(char),11,file);
-    //         // fclose(file);
-    //         break;
-    //     }
-    //     case I_FFLUSH: {
-    //         FILE* file = ((FILE**)mem)[1];
-    //         fflush(file);
-    //         set_i_ready_flag(mem);
-    //         break;
-    //     }
-    //     case I_FCLOSE:{
-    //         FILE* file = ((FILE**)mem)[1];
-    //         fclose(file);
-    //         set_i_ready_flag(mem);
-    //         break;
-    //     }
-    // }
     if(get_i_flag(mem) == I_FSEEK){
         FILE* file = ((FILE**)mem)[1];
         // todo: is lock needed?
@@ -68,14 +31,19 @@ void process_gpu_libc(void* mem, size_t size) {
         set_i_ready_flag(mem);
     }
     if(get_i_flag(mem) == I_FWRITE){
-        FILE* file = *((FILE**)(mem+8)); // encoded FILE* retrieve with (FILE* )*
-        int count = *((int*)(mem+4));
-        // __show_memory((char *)mem,64);
-        MPI_Datatype datatype = *((MPI_Datatype *)(mem+16));
-
-        //TODO: MPI_Type_size not implemented
-        assert(datatype==MPI_CHAR);
-        ((size_t*)mem)[1] = fwrite( ((const char**)mem+24), sizeof(char), count, file);
+        FILE* file = ((FILE**)mem)[1];
+        const void* buf = ((void**)mem)[2];
+        int seekpos = ((int*)mem)[6];
+        // printf("file %p, buf %p, seekpos %d\n", file, buf, seekpos);
+        // fflush(stdout);
+        int ret = fseek(file, seekpos, SEEK_SET);
+        // perror("Error:");
+        // printf("ret: %d\n", ret);
+        assert(ret == 0);
+        int cnt = fwrite(buf, 1, INIT_BUFFER_BLOCK_SIZE, file);
+        ((size_t*)mem)[1] = cnt;
+        assert(cnt == INIT_BUFFER_BLOCK_SIZE);
+        // printf("we write %d bytes: \n", cnt);
         set_i_ready_flag(mem);
     }
     if(get_i_flag(mem) == I_FOPEN){
@@ -103,8 +71,10 @@ void process_gpu_libc(void* mem, size_t size) {
         int seekpos = ((int*)mem)[6];
         int ret = fseek(file, seekpos, SEEK_SET);
         assert(ret == 0);
-        int cnt = fread(buf, 1, INIT_BUFFER_BLOCK_SIZE, file);
-        assert(cnt == INIT_BUFFER_BLOCK_SIZE);
+        size_t cnt = fread(buf, 1, INIT_BUFFER_BLOCK_SIZE, file);
+        // printf("we read %ld bytes: \n", cnt);
+        //assert(cnt == INIT_BUFFER_BLOCK_SIZE);
+        ((size_t*)mem)[1] = cnt;
         set_i_ready_flag(mem);
     }
     if(get_i_flag(mem) == I_FDELETE){
