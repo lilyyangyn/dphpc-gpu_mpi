@@ -203,6 +203,8 @@ __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype dat
 
     if (!(fh.amode & MPI_MODE_RDONLY) && !(fh.amode & MPI_MODE_RDWR)) return MPI_ERR_AMODE;
     if (fh.amode & MPI_MODE_SEQUENTIAL) return MPI_ERR_UNSUPPORTED_OPERATION;  // p514 l43
+    int rank;
+    MPI_Comm_rank(fh.comm, &rank);
     // TODO: Only one thread with RDWR can gain access; unlimited threads with RDONLY can gain access (?)
     // TODO: write into MPI_Status
 
@@ -212,16 +214,17 @@ __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype dat
     char* data = (char*)allocate_host_mem(buffer_size);
     if (data == nullptr) return 0;
 
-    struct rw_params {
-        MPI_File fh;
-        MPI_Datatype datatype;
-        void* buf;
-        int count;
-    } r_param;
-    r_param.fh = fh;  r_param.datatype = datatype;  r_param.count = count;
-    r_param.buf = data + sizeof(int) + sizeof(r_param);  // CPU cannot directly write into buf, so write into mem first
-    *((int*)data) = I_FREAD;
-    *((rw_params*)(data + sizeof(int))) = r_param;
+    // struct rw_params {
+    //     MPI_File fh;
+    //     MPI_Datatype datatype;
+    //     void* buf;
+    //     int count;
+    // } r_param;
+    // r_param.fh = fh;  r_param.datatype = datatype;  r_param.count = count;
+    // r_param.buf = data + sizeof(int) + sizeof(r_param);  // CPU cannot directly write into buf, so write into mem first
+    // *((int*)data) = I_FREAD;
+    __rw_params r_params(I_READY,fh.file,datatype,data + sizeof(__rw_params),count,fh.seek_pos[rank]);
+    *((__rw_params*)data) = r_params;
     
     delegate_to_host(data, buffer_size);
     while (*((int*)data) != I_READY)
@@ -229,9 +232,10 @@ __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype dat
         // blocking wait (p506 l44)
     }
 
-    memcpy(buf, r_param.buf, count);  // sizeof(datatype) * count);
+    memcpy(buf, r_params.buf, count);  // sizeof(datatype) * count);
     size_t ret = ((size_t*)data)[1];
-    if (fh.seek_pos != nullptr) *(fh.seek_pos) += ret;  // TODO fh.seek_pos shouldn't be nullptr. Why it is?
+    // if (fh.seek_pos != nullptr) *(fh.seek_pos) += ret;  // TODO fh.seek_pos shouldn't be nullptr. Why it is?
+    fh.seek_pos[rank]+=ret;
     free_host_mem(data);
     return ret;
 }
@@ -284,7 +288,7 @@ __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datat
     assert(buffer_size > sizeof(int*)*2+sizeof(FILE**)+sizeof(char)*count);
     //init
     char* data = (char*) allocate_host_mem(buffer_size);
-    //assemble metadata
+    //assemble metadata TODO: why we need to re-seek every time? is there redundant seek?
     __rw_params w_params(I_FWRITE,fh.file,datatype,data + sizeof(__rw_params),count,fh.seek_pos[rank]);
     //embed metadata
     *((__rw_params*)data) = w_params;
