@@ -63,6 +63,7 @@
 #define I_FREAD  4
 #define I_FWRITE 5
 #define I_FOPEN  6
+#define I_FDELETE 7
 
 #define I_FOPEN_MODE_RD        0
 #define I_FOPEN_MODE_RW        1
