@@ -59,18 +59,17 @@ namespace gpu_mpi {
         return file_length;
     }
 
-    __device__ int err_code;
     __device__ MPI_File shared_fh;
     __device__ int MPI_File_open(MPI_Comm comm, const char *filename, int amode, MPI_Info info, MPI_File *fh){
         // __shared__ int err_code;
         // __shared__ MPI_File shared_fh;   
+        int err_code;
 
         // create MPI_FILE
         int rank;
         MPI_Comm_rank(comm, &rank);
         // auto block = cooperative_groups::this_thread_block();
         // rank = block.thread_rank();
-        // printf("rank %d, blockIdx: %d, %d, %d\n", rank, blockIdx.x, blockIdx.y, blockIdx.z);
         if(rank == 0){
             err_code = 0;
             // check amode
@@ -147,12 +146,12 @@ namespace gpu_mpi {
                     }
                 }   
             }
+            
         }
         
-        // printf("rank %d, First\n", rank);
         MPI_Barrier(MPI_COMM_WORLD); 
         // __syncthreads(); 
-        // printf("rank %d, Second\n", rank);
+        MPI_Bcast(&err_code, 1, MPI_INT, 0, MPI_COMM_WORLD);
         *fh = shared_fh;
 
         // printf("rank %d, amode %d, file %p, err_code %d, %p\n", rank, shared_fh.amode, shared_fh.file, err_code, &err_code);
