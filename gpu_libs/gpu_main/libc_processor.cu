@@ -68,14 +68,20 @@ void process_gpu_libc(void* mem, size_t size) {
         set_i_ready_flag(mem);
     }
     if(get_i_flag(mem) == I_FWRITE){
-        FILE* file = *((FILE**)(mem+8)); // encoded FILE* retrieve with (FILE* )*
-        int count = *((int*)(mem+4));
-        // __show_memory((char *)mem,64);
-        MPI_Datatype datatype = *((MPI_Datatype *)(mem+16));
+        char * data = (char *)mem;
+        __rw_params w_params = *((__rw_params*)data);
 
-        //TODO: MPI_Type_size not implemented
-        assert(datatype==MPI_CHAR);
-        ((size_t*)mem)[1] = fwrite( ((const char**)mem+24), sizeof(char), count, file);
+
+        // FILE* file = *((FILE**)(mem+8)); // encoded FILE* retrieve with (FILE* )*
+        // int count = *((int*)(mem+4));
+        // // __show_memory((char *)mem,64);
+        // MPI_Datatype datatype = *((MPI_Datatype *)(mem+16));
+
+        // //TODO: MPI_Type_size not implemented
+        assert(w_params.datatype==MPI_CHAR);
+        //seek pos
+        fseek(w_params.file,w_params.seek_pos,SEEK_SET);
+        ((size_t*)mem)[1] = fwrite( w_params.buf, sizeof(char), w_params.count, w_params.file);
         set_i_ready_flag(mem);
     }
     if(get_i_flag(mem) == I_FOPEN){

@@ -85,6 +85,21 @@ namespace gpu_mpi {
         // todo
     };
 
+    /* 
+     * a internal datagram of metadata describing read/write event
+     * which is sent from gpu to cpu
+    */
+    struct __rw_params {
+        int acttype;
+        FILE* file;
+        MPI_Datatype datatype;
+        void* buf;
+        int count;
+        int seek_pos;
+        __device__ __rw_params(int a,FILE* f, MPI_Datatype d, void*b, int c, int s)
+        :acttype(a),file(f),datatype(d),buf(b),count(c),seek_pos(s){}
+    };
+
     // see documentation p493
     __device__ int MPI_File_open(MPI_Comm comm, const char *filename, int amode, MPI_Info info, MPI_File *fh);
     // see documentation p496

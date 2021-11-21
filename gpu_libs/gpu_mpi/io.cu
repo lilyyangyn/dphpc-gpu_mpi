@@ -274,6 +274,8 @@ namespace gpu_mpi {
 
     //not thread safe
     __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
+        int rank;
+        MPI_Comm_rank(fh.comm, &rank);
         //TODO: dynamically assign buffer size
         int buffer_size = 2048;
         // int MPI_Type_size(MPI_Datatype datatype, int *size)
@@ -282,27 +284,20 @@ namespace gpu_mpi {
         assert(buffer_size > sizeof(int*)*2+sizeof(FILE**)+sizeof(char)*count);
         //init
         char* data = (char*) allocate_host_mem(buffer_size);
-        //assemble
-        *((int*)data) = I_FWRITE;
-        *((int*)(data+4)) = count;
-        // printf("OS file descripter address in MPI_File_write:%p\n", fh.file);
-        *((FILE **)(data+8)) = fh.file;
-        // __show_memory(data, 64);
-        
-
-        *((MPI_Datatype*)(data+16)) = datatype;
-        memcpy( ((const char**)data+24) , buf, sizeof(char)*count);
+        //assemble metadata
+        __rw_params w_params(I_FWRITE,fh.file,datatype,data + sizeof(__rw_params),count,fh.seek_pos[rank]);
+        //embed metadata
+        *((__rw_params*)data) = w_params;
+        //embed data
+        memcpy(data+sizeof(__rw_params), buf, sizeof(char)*count);
 
         //execute on CPU
         delegate_to_host((void*)data, buffer_size);
         // wait
         while(((int*)data)[0] != I_READY){};
         int return_value = (int) *((size_t*)(data+8));
-        
-        int rank;
-        MPI_Comm_rank(fh.comm, &rank);
-        //assuming individual file pointer, but how does shared pointer differ from this?
-        // fh.seek_pos[rank]+=return_value;
+        //TODO: assuming individual file pointer, but how does shared pointer differ from this?
+        fh.seek_pos[rank]+=return_value;
         free_host_mem(data);
         //TODO: step 4 error catching
         //#memory cosistency: assuming that write is not reordered with write
