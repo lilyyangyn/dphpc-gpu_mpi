@@ -288,6 +288,7 @@ __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datat
     __rw_params w_params(I_FWRITE,fh.file,datatype,data + sizeof(__rw_params),count,fh.seek_pos[rank]);
     //embed metadata
     *((__rw_params*)data) = w_params;
+    // memcpy(data, (void*)&w_params, sizeof(__rw_params));
     //embed data
     memcpy(data+sizeof(__rw_params), buf, sizeof(char)*count);
 
@@ -304,6 +305,26 @@ __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datat
     return return_value;
 }
 
+__device__ void __delete_file(const char* filename){
+    if(filename == NULL){
+        return;
+    }
+    // TODO: ask cpu to remove the file
+    int buffer_size = 128;
+    char* data = (char*) allocate_host_mem(buffer_size);
+
+    ((int*)data)[0] = I_FDELETE;
+    // remove the file associated with filename
+    int filename_size = 0;
+    while (filename[filename_size] != '\0') filename_size++;
+    memcpy((const char**)data + 1, filename, filename_size + 1);
+    printf("C\n");
+    delegate_to_host((void*)data, buffer_size);
+    // wait
+    while(((int*)data)[0] != I_READY){};
+    //file remove done
+    free_host_mem(data);
+}
 
 __device__ int MPI_File_close(MPI_File *fh){
     // synchronize file state
