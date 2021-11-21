@@ -1,6 +1,7 @@
 #include "io.cuh"
 #include "../gpu_main/device_host_comm.cuh"
 #include <cassert>
+#include <cooperative_groups.h>
 
 // #include "mpi.cuh"
 #define N 100
@@ -58,95 +59,103 @@ namespace gpu_mpi {
         return file_length;
     }
 
-
+    __device__ int err_code;
+    __device__ MPI_File shared_fh;
     __device__ int MPI_File_open(MPI_Comm comm, const char *filename, int amode, MPI_Info info, MPI_File *fh){
-        __device__ __shared__ int err_code;
-        __device__ __shared__ MPI_File shared_fh;
-
-        // check amode
-        if (((amode & MPI_MODE_RDONLY) ? 1 : 0) + ((amode & MPI_MODE_RDWR) ? 1 : 0) +
-            ((amode & MPI_MODE_WRONLY) ? 1 : 0) != 1) {
-            // see documentation p495 line 7
-            err_code = MPI_ERR_AMODE;
-        }
-        if(((amode & MPI_MODE_CREATE) || (amode & MPI_MODE_EXCL)) && (amode & MPI_MODE_RDONLY)){
-            // see documentation p495 line 8
-            err_code = MPI_ERR_AMODE;
-        }
-        if((amode & MPI_MODE_RDWR) && (amode & MPI_MODE_SEQUENTIAL)){
-            // see documentation p495 line 9
-            err_code = MPI_ERR_AMODE;
-        }
+        // __shared__ int err_code;
+        // __shared__ MPI_File shared_fh;   
 
         // create MPI_FILE
         int rank;
         MPI_Comm_rank(comm, &rank);
-        if(err_code == 0 && rank == 0){
-            shared_fh.amode = amode;
-            shared_fh.comm = comm;
-
-            // initialize fh->file
-            shared_fh.file = __open_file(filename, I_FOPEN_MODE_RD);
-
-            // check file existence
-            if(shared_fh.file == NULL){
-                if(amode & MPI_MODE_RDONLY){
-                    err_code = MPI_ERR_NO_SUCH_FILE;
-                }
-                if(!(amode & MPI_MODE_CREATE)){
-                    err_code = MPI_ERR_NO_SUCH_FILE;
-                }
+        // auto block = cooperative_groups::this_thread_block();
+        // rank = block.thread_rank();
+        // printf("rank %d, blockIdx: %d, %d, %d\n", rank, blockIdx.x, blockIdx.y, blockIdx.z);
+        if(rank == 0){
+            err_code = 0;
+            // check amode
+            if (((amode & MPI_MODE_RDONLY) ? 1 : 0) + ((amode & MPI_MODE_RDWR) ? 1 : 0) +
+                ((amode & MPI_MODE_WRONLY) ? 1 : 0) != 1) {
+                // see documentation p495 line 7
+                err_code = MPI_ERR_AMODE;
             }
-            if(amode & MPI_MODE_EXCL){
-                // File must not exist
-                err_code = MPI_ERR_FILE_EXISTS;
+            if(((amode & MPI_MODE_CREATE) || (amode & MPI_MODE_EXCL)) && (amode & MPI_MODE_RDONLY)){
+                // see documentation p495 line 8
+                err_code = MPI_ERR_AMODE;
+            }
+            if((amode & MPI_MODE_RDWR) && (amode & MPI_MODE_SEQUENTIAL)){
+                // see documentation p495 line 9
+                err_code = MPI_ERR_AMODE;
             }
 
-            if(err_code != 0) {
-                __close_file(shared_fh.file);
-            }else{
-                if(!(amode & MPI_MODE_RDONLY)){
-                    __close_file(shared_fh.file);
-                    int mode;
-                    if(amode & MPI_MODE_RDWR){
-                        if(amode & MPI_MODE_APPEND) {
-                            mode = I_FOPEN_MODE_RW_APPEND;
-                        }else{
-                            mode = I_FOPEN_MODE_RW;
-                        }
-                    }else if(amode & MPI_MODE_WRONLY){
-                        if(amode & MPI_MODE_APPEND) {
-                            mode = I_FOPEN_MODE_WD_APPEND;
-                        }else{
-                            mode = I_FOPEN_MODE_WD;
-                        }
+            if(err_code == 0){
+                shared_fh.amode = amode;
+                shared_fh.comm = comm;
+
+                // initialize fh->file
+                shared_fh.file = __open_file(filename, I_FOPEN_MODE_RD);
+                // check file existence
+                if(shared_fh.file == NULL){
+                    if(amode & MPI_MODE_RDONLY){
+                        err_code = MPI_ERR_NO_SUCH_FILE;
                     }
-                    shared_fh.file = __open_file(filename, mode);
+                    if(!(amode & MPI_MODE_CREATE)){
+                        err_code = MPI_ERR_NO_SUCH_FILE;
+                    }
                 }
-                
-                // initialize fh->seek_pos
-                // TODO: MPI_MODE_UNIQUE_OPEN -> Only one seek_pos???
-                int size;
-                MPI_Comm_size(comm, &size);
-                // assert(size == 1);
-                fh->seek_pos = (int*)malloc(size*sizeof(int));
-                int init_pos = 0;
-                if(amode & MPI_MODE_APPEND){
-                    // In append mode: set pointer to end of file 
-                    // see documentation p494 line 42
-                    init_pos = __get_file_size(shared_fh.file);
+                if(amode & MPI_MODE_EXCL){
+                    // File must not exist
+                    err_code = MPI_ERR_FILE_EXISTS;
                 }
-                // init_pos = 1;
-                for (int i = 0; i < size; i++){
-                    fh->seek_pos[i] = init_pos;
-                }
-                // assert(fh->seek_pos[0] == 1);
-            }   
+
+                if(err_code != 0) {
+                    __close_file(shared_fh.file);
+                }else{
+                    if(!(amode & MPI_MODE_RDONLY)){
+                        __close_file(shared_fh.file);
+                        int mode;
+                        if(amode & MPI_MODE_RDWR){
+                            if(amode & MPI_MODE_APPEND) {
+                                mode = I_FOPEN_MODE_RW_APPEND;
+                            }else{
+                                mode = I_FOPEN_MODE_RW;
+                            }
+                        }else if(amode & MPI_MODE_WRONLY){
+                            if(amode & MPI_MODE_APPEND) {
+                                mode = I_FOPEN_MODE_WD_APPEND;
+                            }else{
+                                mode = I_FOPEN_MODE_WD;
+                            }
+                        }
+                        shared_fh.file = __open_file(filename, mode);
+                    }
+                    
+                    // initialize fh->seek_pos
+                    // TODO: MPI_MODE_UNIQUE_OPEN -> Only one seek_pos???
+                    int size;
+                    MPI_Comm_size(comm, &size);
+                    fh->seek_pos = (int*)malloc(size*sizeof(int));
+                    int init_pos = 0;
+                    if(amode & MPI_MODE_APPEND){
+                        // In append mode: set pointer to end of file 
+                        // see documentation p494 line 42
+                        init_pos = __get_file_size(shared_fh.file);
+                    }
+                    // init_pos = 1;
+                    for (int i = 0; i < size; i++){
+                        fh->seek_pos[i] = init_pos;
+                    }
+                }   
+            }
         }
         
-        __syncthreads();
+        // printf("rank %d, First\n", rank);
+        MPI_Barrier(MPI_COMM_WORLD); 
+        // __syncthreads(); 
+        // printf("rank %d, Second\n", rank);
         *fh = shared_fh;
 
+        // printf("rank %d, amode %d, file %p, err_code %d, %p\n", rank, shared_fh.amode, shared_fh.file, err_code, &err_code);
         return err_code;
     }
 
