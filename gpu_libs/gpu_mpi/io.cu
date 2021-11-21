@@ -412,24 +412,27 @@ namespace gpu_mpi {
         return count;
     }
     
-    __device__ void __delete_file(const char* filename){
+    __device__ int __delete_file(const char* filename){
         if(filename == NULL){
-            return;
+            return -1;
         }
         // TODO: ask cpu to remove the file
         int buffer_size = 128;
         char* data = (char*) allocate_host_mem(buffer_size);
-
+        
         ((int*)data)[0] = I_FDELETE;
         // remove the file associated with filename
         int filename_size = 0;
         while (filename[filename_size] != '\0') filename_size++;
         memcpy((const char**)data + 1, filename, filename_size + 1);
+        
         delegate_to_host((void*)data, buffer_size);
         // wait
         while(((int*)data)[0] != I_READY){};
         //file remove done
         free_host_mem(data);
+
+        return 0;
     }
 
     __device__ int MPI_File_close(MPI_File *fh){
@@ -442,10 +445,6 @@ namespace gpu_mpi {
 
         // only free the file handle object once
         if(rank == 0){
-            // TODO: if fh->amode is MPI_MODE_DELETE_ON_CLOSE, need to delete that file
-            if(fh->amode == MPI_MODE_DELETE_ON_CLOSE){
-                ;
-            }
             // release the fh object
             free(fh->seek_pos);
             // TODO: check status of buffer blocks, write dirty blocks back
@@ -457,6 +456,7 @@ namespace gpu_mpi {
                     fh->status[i] = BLOCK_IN_CLEAN;
                 }
             }
+
             // TODO: release buffer array
             for(int i = 0; i < num_blocks; i++){
                 if(fh->status[i] != BLOCK_NOT_IN)
@@ -469,6 +469,11 @@ namespace gpu_mpi {
             fh->filename = nullptr;
             // close the file associated with file handle
             __close_file(fh->file);
+
+            // TODO: if fh->amode is MPI_MODE_DELETE_ON_CLOSE, need to delete that file
+            if(fh->amode == MPI_MODE_DELETE_ON_CLOSE){
+                __delete_file(fh->filename);
+            }
         }
 
         // __syncthreads();
@@ -491,4 +496,17 @@ namespace gpu_mpi {
 
         return 0;
     } 
+
+    __device__ int MPI_File_delete(const char *filename, MPI_Info info){
+        //TODO: check if there is a process having this file open
+
+        int ret, err = 0;
+        FILE* file = __open_file(filename, I_FOPEN_MODE_RD);
+        if(file == NULL){
+            return err = MPI_ERR_NO_SUCH_FILE;
+        }
+        ret = __delete_file(filename);
+        // MPI_Barrier(MPI_COMM_WORLD);
+        return err;
+    }
 
