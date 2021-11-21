@@ -73,47 +73,47 @@
 struct MPI_Status;
 namespace gpu_mpi { 
 }
-    struct MPI_Info{
-        // todo
-    };    
-    
-    struct MPI_File{
-        MPI_Comm comm;
-        int* seek_pos;
-        int amode;
-        FILE* file;
-        // todo
-    };
+struct MPI_Info{
+    // todo
+};    
 
-    /* 
-     * a internal datagram of metadata describing read/write event
-     * which is sent from gpu to cpu
-    */
-    struct __rw_params {
-        int acttype;
-        FILE* file;
-        MPI_Datatype datatype;
-        void* buf;
-        int count;
-        int seek_pos;
-        __device__ __rw_params(int a,FILE* f, MPI_Datatype d, void*b, int c, int s)
-        :acttype(a),file(f),datatype(d),buf(b),count(c),seek_pos(s){}
-    };
+struct MPI_File{
+    MPI_Comm comm;
+    int* seek_pos;
+    int amode;
+    FILE* file;
+    // todo
+};
 
-    // see documentation p493
-    __device__ int MPI_File_open(MPI_Comm comm, const char *filename, int amode, MPI_Info info, MPI_File *fh);
-    // see documentation p496
-    __device__ int MPI_File_close(MPI_File *fh);
-    // see documentation p520
-    __device__ int MPI_File_seek(MPI_File fh, MPI_Offset offset, int whence);
-    // mpi3.1 p516
-    __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype datatype, MPI_Status *status);
-    __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datatype datatype, MPI_Status *status);
+/* 
+    * a internal datagram of metadata describing read/write event
+    * which is sent from gpu to cpu
+*/
+struct __rw_params {
+    int acttype;
+    FILE* file;
+    MPI_Datatype datatype;
+    void* buf;
+    int count;
+    int seek_pos;
+    __device__ __rw_params(int a,FILE* f, MPI_Datatype d, void*b, int c, int s)
+    :acttype(a),file(f),datatype(d),buf(b),count(c),seek_pos(s){}
+};
 
-    // see documentation p521
-    __device__ int MPI_File_get_position(MPI_File fh, MPI_Offset *offset);
-    // see documentation p521
-    __device__ int MPI_File_get_size(MPI_File fh, MPI_Offset *size);
+// see documentation p493
+__device__ int MPI_File_open(MPI_Comm comm, const char *filename, int amode, MPI_Info info, MPI_File *fh);
+// see documentation p496
+__device__ int MPI_File_close(MPI_File *fh);
+// see documentation p520
+__device__ int MPI_File_seek(MPI_File fh, MPI_Offset offset, int whence);
+// mpi3.1 p516
+__device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype datatype, MPI_Status *status);
+__device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datatype datatype, MPI_Status *status);
+
+// see documentation p521
+__device__ int MPI_File_get_position(MPI_File fh, MPI_Offset *offset);
+// see documentation p521
+__device__ int MPI_File_get_size(MPI_File fh, MPI_Offset *size);
 
 
 #endif

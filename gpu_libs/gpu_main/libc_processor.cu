@@ -13,43 +13,6 @@ void set_i_ready_flag(void* mem){
 }
 
 void process_gpu_libc(void* mem, size_t size) {
-    // intend to change to switch-case statement, but need to inform everyone to remember break;
-    // switch(get_i_flag(mem)){
-    //     case I_FSEEK: {
-    //         FILE* file = ((FILE**)mem)[1];
-    //         // todo: is lock needed?
-    //         fseek(file, 0L, SEEK_END);
-    //         ((long int*)mem)[1] = ftell(file);
-    //         set_i_ready_flag(mem);
-    //         return; //intentionally use return instead of break
-    //     }
-    //     case I_FWRITE: {
-    //         FILE* file = ((FILE**)mem)[1]; // encoded FILE* retrieve with (FILE* )*
-    //         MPI_Datatype* datatype = ((MPI_Datatype*)mem)[2];
-    //         //TODO: MPI_Type_size not implemented
-    //         assert(datatype==MPI_CHAR);
-    //         fwrite( ((char*)mem)[3], sizeof(char), size-sizeof(MPI_Datatype*)-sizeof(FILE*)-sizeof(int*), file);
-    //         // printf("cjc\n");
-    //         // FILE* file = fopen("cjc","w");
-    //         // char *a = "hello world";
-    //         // printf("cjc\n");
-    //         // fwrite(a,sizeof(char),11,file);
-    //         // fclose(file);
-    //         break;
-    //     }
-    //     case I_FFLUSH: {
-    //         FILE* file = ((FILE**)mem)[1];
-    //         fflush(file);
-    //         set_i_ready_flag(mem);
-    //         break;
-    //     }
-    //     case I_FCLOSE:{
-    //         FILE* file = ((FILE**)mem)[1];
-    //         fclose(file);
-    //         set_i_ready_flag(mem);
-    //         break;
-    //     }
-    // }
     if(get_i_flag(mem) == I_FSEEK){
         FILE* file = ((FILE**)mem)[1];
         // todo: is lock needed?
@@ -70,13 +33,6 @@ void process_gpu_libc(void* mem, size_t size) {
     if(get_i_flag(mem) == I_FWRITE){
         char * data = (char *)mem;
         __rw_params w_params = *((__rw_params*)data);
-
-
-        // FILE* file = *((FILE**)(mem+8)); // encoded FILE* retrieve with (FILE* )*
-        // int count = *((int*)(mem+4));
-        // // __show_memory((char *)mem,64);
-        // MPI_Datatype datatype = *((MPI_Datatype *)(mem+16));
-
         // //TODO: MPI_Type_size not implemented
         assert(w_params.datatype==MPI_CHAR);
         //seek pos
