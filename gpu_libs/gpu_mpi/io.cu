@@ -134,7 +134,7 @@ namespace gpu_mpi {
                     // TODO: MPI_MODE_UNIQUE_OPEN -> Only one seek_pos???
                     int size;
                     MPI_Comm_size(comm, &size);
-                    fh->seek_pos = (int*)malloc(size*sizeof(int));
+                    shared_fh.seek_pos = (int*)malloc(size*sizeof(int));
                     int init_pos = 0;
                     if(amode & MPI_MODE_APPEND){
                         // In append mode: set pointer to end of file 
@@ -143,7 +143,7 @@ namespace gpu_mpi {
                     }
                     // init_pos = 1;
                     for (int i = 0; i < size; i++){
-                        fh->seek_pos[i] = init_pos;
+                        shared_fh.seek_pos[i] = init_pos;
                     }
                 }   
             }
