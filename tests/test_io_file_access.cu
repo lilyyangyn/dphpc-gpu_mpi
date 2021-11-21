@@ -29,10 +29,10 @@ struct FileRead {
     }
 };
 
-TEST_CASE("FileRead", "[FileRead]") {
-    TestRunner testRunner(1);
-    testRunner.run<FileRead>();
-}
+// TEST_CASE("FileRead", "[FileRead]") {
+//     TestRunner testRunner(1);
+//     testRunner.run<FileRead>();
+// }
 
 struct FileReadAmodeIncorrect {
     static __device__ void run(bool& ok) {
@@ -59,7 +59,35 @@ struct FileReadAmodeIncorrect {
     }
 };
 
-TEST_CASE("FileReadAmodeIncorrect", "[FileReadAmodeIncorrect]") {
-    TestRunner testRunner(1);
-    testRunner.run<FileReadAmodeIncorrect>();
+// TEST_CASE("FileReadAmodeIncorrect", "[FileReadAmodeIncorrect]") {
+//     TestRunner testRunner(1);
+//     testRunner.run<FileReadAmodeIncorrect>();
+// }
+
+struct FileSize {
+    static __device__ void run(bool& ok) {
+        MPI_Init(nullptr, nullptr);
+
+        int rank;
+        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+        MPI_Info info;
+        MPI_File fh;
+        MPI_File_open(MPI_COMM_WORLD, "1.txt", MPI_MODE_RDWR | MPI_MODE_CREATE, info, &fh);
+        if (rank == 0) MPI_File_write(fh, "a", 1, MPI_CHAR, nullptr);
+
+        MPI_Offset size;
+        MPI_File_get_size(fh, &size);
+
+        MPI_File_close(&fh);
+
+        ok = size == 1;
+
+        MPI_Finalize();
+    }
+};
+
+TEST_CASE("FileSize", "[FileSize]") {
+    TestRunner testRunner(2);
+    testRunner.run<FileSize>();
 }

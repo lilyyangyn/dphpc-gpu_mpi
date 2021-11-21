@@ -333,3 +333,19 @@ namespace gpu_mpi {
         return 0;
     }
 
+    __device__ int MPI_File_get_size(MPI_File fh, MPI_Offset *size){
+        int sz; 
+
+        int rank;
+        MPI_Comm_rank(fh.comm, &rank);
+        if(rank == 0){
+            sz = __get_file_size(fh.file);
+        }
+
+        MPI_Barrier(MPI_COMM_WORLD);
+        MPI_Bcast(&sz, 1, MPI_INT, 0, MPI_COMM_WORLD);
+        *size = sz;
+
+        return 0;
+    } 
+

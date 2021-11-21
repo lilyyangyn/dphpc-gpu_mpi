@@ -97,6 +97,8 @@ namespace gpu_mpi {
 
     // see documentation p521
     __device__ int MPI_File_get_position(MPI_File fh, MPI_Offset *offset);
+    // see documentation p521
+    __device__ int MPI_File_get_size(MPI_File fh, MPI_Offset *size);
 
 
 #endif
