@@ -21,6 +21,7 @@ scriptdir=$(readlink -f $(dirname "$0"))
 vg=4
 vb=1
 vs=8192
+# while test $# -gt 0; do
 while getopts ":h:g:b:s:f:" flag; do
     case "${flag}" in
         h)
@@ -33,27 +34,45 @@ while getopts ":h:g:b:s:f:" flag; do
             SOURCE_DIR=$(readlink -f $(dirname "${OPTARG}"));;
         \?) # incorrect option
          echo "Error: Invalid option"
+         Help
          exit;;
     esac
 done
 echo "$vg, $vb, $vs, $input"
 if [ -z "$input" ]; then
-    echo "---------- no input source file, default toolchain_tests/pi ----------"
+    echo "
+    ---------- no input source file, default toolchain_tests/pi ----------
+    "
     SOURCE_DIR="$GPU_MPI_PROJECT/toolchain_tests/pi"
     input="$GPU_MPI_PROJECT/toolchain_tests/pi"
 else
-    echo "---------------------- using sourcefile $input ---------------------------"
+    echo "
+    ---------------------- using sourcefile $input ---------------------------
+    "
 fi
 
+OBJECT_DIR="$GPU_MPI_PROJECT/build/toolchain_tests/"
+mkdir -p $OBJECT_DIR
+OBJECT="$OBJECT_DIR$(basename "$input" | sed 's/\(.*\)\..*/\1/')"
 
-
-
-
-echo $SOURCE_DIR
+echo "source dir: $SOURCE_DIR"
+echo "object dir: $OBJECT"
 pushd .
-cd $scriptdir
+cd $OBJECT_DIR
 
-/home/$USER/miniconda3/bin/python3.7 $GPU_MPI_PROJECT/build/scripts/gpumpicc.py $SOURCE_DIR/$(basename $input) -o $SOURCE_DIR/$(basename "$input" | sed 's/\(.*\)\..*/\1/')
+echo "
+------compiling with gpumpicc.py-----
+"
 
-$SOURCE_DIR/$(basename "$input" | sed 's/\(.*\)\..*/\1/') ---gpumpi -g $vg -b $vb -s $vs
+if ! /home/$USER/miniconda3/bin/python3.7 $GPU_MPI_PROJECT/build/scripts/gpumpicc.py $SOURCE_DIR/$(basename $input) -o $OBJECT; then
+    echo "
+    COMPILE ERROR!
+    " >&2
+    exit
+fi
+
+echo "
+------------running---------------
+"
+$OBJECT ---gpumpi -g $vg -b $vb -s $vs
 popd
