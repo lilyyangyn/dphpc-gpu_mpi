@@ -4,3 +4,4 @@ build/
 tags
 .vscode
 llvm/
+toolchain_tests/basicIO/*.cu
