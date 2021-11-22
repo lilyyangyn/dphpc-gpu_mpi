@@ -90,3 +90,26 @@ TEST_CASE("FileOpenAmodeIncorrect", "[FileOpenAmodeIncorrect]") {
     TestRunner testRunner(1);
     testRunner.run<FileOpenAmodeIncorrect>();
 }
+
+struct FileCloseFileExist {
+    static __device__ void run(bool& ok) {
+        MPI_Init(nullptr, nullptr);
+
+        MPI_Info info;
+        MPI_File fh;
+        // int err MPI_File_open(MPI_COMM_WORLD, nullptr, MPI_MODE_RDONLY, info, &fh);
+        MPI_File_open(MPI_COMM_WORLD, "test.txt", MPI_MODE_RDWR | MPI_MODE_CREATE, info, &fh);
+        MPI_File_close(&fh);
+
+        int res = MPI_File_delete("test.txt", info);
+        ok = res==0;
+
+        MPI_Finalize();
+    }
+};
+
+TEST_CASE("FileCloseFileExist", "[FileCloseFileExist]") {
+    TestRunner testRunner(1);
+    testRunner.run<FileCloseFileExist>();
+}
+

@@ -78,6 +78,7 @@ void process_gpu_libc(void* mem, size_t size) {
     if(get_i_flag(mem) == I_FDELETE){
         const char* filename = (const char*)((const char**)mem + 1);
         int res = remove(filename);
+        ((int*)mem)[1] = res;
         set_i_ready_flag(mem);
     }
 }

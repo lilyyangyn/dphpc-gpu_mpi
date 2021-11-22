@@ -149,9 +149,9 @@ __device__ int MPI_File_open(MPI_Comm comm, const char *filename, int amode, MPI
         
     }
     
-    MPI_Barrier(MPI_COMM_WORLD); 
+    MPI_Barrier(comm); 
     // __syncthreads(); 
-    MPI_Bcast(&err_code, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&err_code, 1, MPI_INT, 0, comm);
     *fh = shared_fh;
 
     // printf("rank %d, amode %d, file %p, err_code %d, %p\n", rank, shared_fh.amode, shared_fh.file, err_code, &err_code);
@@ -309,9 +309,9 @@ __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datat
     return return_value;
 }
 
-__device__ void __delete_file(const char* filename){
+__device__ int __delete_file(const char* filename){
     if(filename == NULL){
-        return;
+        return 0;
     }
     // TODO: ask cpu to remove the file
     int buffer_size = 128;
@@ -327,13 +327,32 @@ __device__ void __delete_file(const char* filename){
     // wait
     while(((int*)data)[0] != I_READY){};
     //file remove done
+    int res = ((int*)data)[1];
     free_host_mem(data);
+
+    return res;
+}
+
+__device__ int MPI_File_delete(const char *filename, MPI_Info info){
+    int err_code; 
+
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    if(rank == 0){
+        // TODO: file not exist error
+        int res = __delete_file(filename);
+        err_code = (res == 0) ? 0 : MPI_ERR_IO; 
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Bcast(&err_code, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    return err_code;
 }
 
 __device__ int MPI_File_close(MPI_File *fh){
     // synchronize file state
     // __syncthreads();
-    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Barrier(fh->comm);
 
     int rank;
     MPI_Comm_rank(fh->comm, &rank);
@@ -349,7 +368,7 @@ __device__ int MPI_File_close(MPI_File *fh){
         __close_file(fh->file);
     }
     // __syncthreads();
-    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Barrier(fh->comm);
     return 0;
 }
 
@@ -362,8 +381,8 @@ __device__ int MPI_File_get_size(MPI_File fh, MPI_Offset *size){
         sz = __get_file_size(fh.file);
     }
 
-    MPI_Barrier(MPI_COMM_WORLD);
-    MPI_Bcast(&sz, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Barrier(fh.comm);
+    MPI_Bcast(&sz, 1, MPI_INT, 0, fh.comm);
     *size = sz;
 
     return 0;
