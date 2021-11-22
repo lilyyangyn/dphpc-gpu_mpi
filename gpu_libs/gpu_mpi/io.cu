@@ -512,6 +512,8 @@ namespace gpu_mpi {
 
 
 
+
+
     __device__ int MPI_File_read_at(MPI_File fh, MPI_Offset offset, void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
         MPI_Offset old_offset;
         int ret;
@@ -523,7 +525,15 @@ namespace gpu_mpi {
         if(ret != 0){
             return ret;
         }
-        return MPI_File_read(fh, buf, count, datatype, status);
+        ret = MPI_File_read(fh, buf, count, datatype, status);
+        if(ret != 0){
+            return ret;
+        }
+        ret = MPI_File_seek(fh, old_offset, MPI_SEEK_SET);
+        if(ret != 0){
+            return ret;
+        }
+        return 0;
     }
     __device__ int MPI_File_write_at(MPI_File fh, MPI_Offset offset, void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
         MPI_Offset old_offset;
@@ -536,5 +546,13 @@ namespace gpu_mpi {
         if(ret != 0){
             return ret;
         }
-        return MPI_File_write(fh, buf, count, datatype, status);
+        ret = MPI_File_write(fh, buf, count, datatype, status);
+        if(ret != 0){
+            return ret;
+        }
+        ret = MPI_File_seek(fh, old_offset, MPI_SEEK_SET);
+        if(ret != 0){
+            return ret;
+        }
+        return 0;
     }
