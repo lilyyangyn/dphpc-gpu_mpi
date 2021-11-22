@@ -460,7 +460,7 @@ namespace gpu_mpi {
             // TODO: release buffer array
             for(int i = 0; i < num_blocks; i++){
                 if(fh->status[i] != BLOCK_NOT_IN)
-                    free(fh->buffer[i]);
+                    free_host_mem(fh->buffer[i]);
             }
             free(fh->buffer);
             // TODO: release status array
