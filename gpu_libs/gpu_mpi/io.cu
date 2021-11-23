@@ -180,10 +180,10 @@ namespace gpu_mpi {
         }
         
         // printf("rank %d, First\n", rank);
-        MPI_Barrier(MPI_COMM_WORLD); 
+        MPI_Barrier(comm); 
         // __syncthreads(); 
         // printf("rank %d, Second\n", rank);
-        MPI_Bcast(&err_code, 1, MPI_INT, 0, MPI_COMM_WORLD);
+        MPI_Bcast(&err_code, 1, MPI_INT, 0, comm);
         *fh = shared_fh;
 
         return err_code;
@@ -440,7 +440,7 @@ namespace gpu_mpi {
 
     __device__ int MPI_File_close(MPI_File *fh){
         // synchronize file state
-        MPI_Barrier(MPI_COMM_WORLD);
+        MPI_Barrier(fh->comm);
         // __syncthreads();
 
         int rank;
@@ -480,7 +480,7 @@ namespace gpu_mpi {
         }
 
         // __syncthreads();
-        MPI_Barrier(MPI_COMM_WORLD);
+        MPI_Barrier(fh->comm);
         return 0;
     }
 
@@ -493,8 +493,8 @@ namespace gpu_mpi {
             sz = __get_file_size(fh.file);
         }
 
-        MPI_Barrier(MPI_COMM_WORLD);
-        MPI_Bcast(&sz, 1, MPI_INT, 0, MPI_COMM_WORLD);
+        MPI_Barrier(fh.comm);
+        MPI_Bcast(&sz, 1, MPI_INT, 0, fh.comm);
         *size = sz;
 
         return 0;
