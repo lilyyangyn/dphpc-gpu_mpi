@@ -10,6 +10,7 @@ namespace gpu_mpi {
 
     __device__ void mutex_lock(unsigned int *mutex) {
         unsigned int ns = 8;
+        // spining!
         while (atomicCAS(mutex, 0, 1) == 1) {
             //__nanosleep(ns);
             if (ns < 256) {
@@ -163,9 +164,11 @@ namespace gpu_mpi {
                         shared_fh.seek_pos[i] = init_pos;
                     }
 
-                    // TODO: allocate and initialize buffer array, status array, size
+                    // TODO: allocate and initialize buffer array, status array, size, shared_seek_pos
                     shared_fh.num_blocks = (int*)malloc(sizeof(int));
                     *(shared_fh.num_blocks) = INIT_BUFFER_BLOCK_NUM;
+                    shared_fh.shared_seek_pos = (int*)malloc(sizeof(int));
+                    *(shared_fh.shared_seek_pos) = init_pos;
                     shared_fh.buffer = (void**)malloc(INIT_BUFFER_BLOCK_NUM * sizeof(void*));
                     shared_fh.status = (int*)malloc(INIT_BUFFER_BLOCK_NUM * sizeof(int));
                     for(int i = 0; i < INIT_BUFFER_BLOCK_NUM; i++){
@@ -360,7 +363,7 @@ namespace gpu_mpi {
         // printf("%s", "__write_block succeeds\n");
     }
 
-    __device__ unsigned int lock;
+    __device__ unsigned int lock = 0;
     __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
         // TODO: check amode
 
@@ -511,9 +514,6 @@ namespace gpu_mpi {
     }
 
 
-
-
-
     __device__ int MPI_File_read_at(MPI_File fh, MPI_Offset offset, void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
         MPI_Offset old_offset;
         int ret;
@@ -554,5 +554,61 @@ namespace gpu_mpi {
         if(ret != 0){
             return ret;
         }
+        return 0;
+    }
+
+    __device__ unsigned int shared_read_lock = 0;
+    __device__ int MPI_File_read_shared(MPI_File fh, void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
+        mutex_lock(&shared_read_lock);
+        MPI_Offset old_ind_offset;
+        int ret;
+        ret = MPI_File_get_position(fh, &old_ind_offset);
+        if(ret != 0){
+            mutex_unlock(&shared_read_lock);
+            return ret;
+        }
+        ret = MPI_File_seek(fh, *fh.shared_seek_pos, MPI_SEEK_SET);
+        if(ret != 0){
+            mutex_unlock(&shared_read_lock);
+            return ret;
+        }
+        // update the shared seek position
+        int res = MPI_File_read(fh, buf, count, datatype, status);
+        (*fh.shared_seek_pos) += res;
+        // reset individual seek position
+        ret = MPI_File_seek(fh, old_ind_offset, MPI_SEEK_SET);
+        if(ret != 0){
+            mutex_unlock(&shared_read_lock);
+            return ret;
+        }
+        mutex_unlock(&shared_read_lock);
+        return 0;
+    }
+
+    __device__ unsigned int shared_write_lock = 0;
+    __device__ int MPI_File_write_shared(MPI_File fh, const void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
+        mutex_lock(&shared_write_lock);
+        MPI_Offset old_ind_offset;
+        int ret;
+        ret = MPI_File_get_position(fh, &old_ind_offset);
+        if(ret != 0){
+            mutex_unlock(&shared_write_lock);
+            return ret;
+        }
+        ret = MPI_File_seek(fh, *fh.shared_seek_pos, MPI_SEEK_SET);
+        if(ret != 0){
+            mutex_unlock(&shared_read_lock);
+            return ret;
+        }
+        // update the shared seek position
+        int res = MPI_File_write(fh, buf, count, datatype, status);
+        (*fh.shared_seek_pos) += res;
+        // reset individual seek position
+        ret = MPI_File_seek(fh, old_ind_offset, MPI_SEEK_SET);
+        if(ret != 0){
+            mutex_unlock(&shared_write_lock);
+            return ret;
+        }
+        mutex_unlock(&shared_write_lock);
         return 0;
     }

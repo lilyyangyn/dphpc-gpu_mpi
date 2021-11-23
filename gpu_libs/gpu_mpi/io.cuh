@@ -95,6 +95,7 @@ namespace gpu_mpi {
         int*        status; // status of each block: NOT_IN/ CLEAN/ DIRTY
         int*        num_blocks;   // number of blocks
         const char* filename;
+        int*        shared_seek_pos;
     };
 
     // see documentation p493
@@ -110,6 +111,8 @@ namespace gpu_mpi {
     __device__ int MPI_File_read_at(MPI_File fh, MPI_Offset offset, void *buf, int count, MPI_Datatype datatype, MPI_Status *status);
     __device__ int MPI_File_write_at(MPI_File fh, MPI_Offset offset, void *buf, int count, MPI_Datatype datatype, MPI_Status *status);
 
+    __device__ int MPI_File_read_shared(MPI_File fh, void *buf, int count, MPI_Datatype datatype, MPI_Status *status);
+    __device__ int MPI_File_write_shared(MPI_File fh, const void *buf, int count, MPI_Datatype datatype, MPI_Status *status);
     // see documentation p521
     __device__ int MPI_File_get_position(MPI_File fh, MPI_Offset *offset);
     // see documentation p521
