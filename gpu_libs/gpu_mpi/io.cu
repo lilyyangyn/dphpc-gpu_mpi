@@ -13,9 +13,9 @@ namespace gpu_mpi {
         // spining!
         while (atomicCAS(mutex, 0, 1) == 1) {
             //__nanosleep(ns);
-            if (ns < 256) {
-                ns *= 2;
-            }
+            // if (ns < 256) {
+            //     ns *= 2;
+            // }
         }
     }
 
