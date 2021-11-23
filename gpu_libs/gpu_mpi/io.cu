@@ -1,4 +1,5 @@
 #include "io.cuh"
+#include "mpi_common.cuh"
 #include "datatypes.cuh"
 #include "../gpu_main/device_host_comm.cuh"
 #include <cassert>
@@ -137,7 +138,7 @@ __device__ int MPI_File_open(MPI_Comm comm, const char *filename, int amode, MPI
     // auto block = cooperative_groups::this_thread_block();
     // rank = block.thread_rank();
     if(rank == 0){
-        err_code = 0;
+        err_code = MPI_SUCCESS;
         // check amode
         if (((amode & MPI_MODE_RDONLY) ? 1 : 0) + ((amode & MPI_MODE_RDWR) ? 1 : 0) +
             ((amode & MPI_MODE_WRONLY) ? 1 : 0) != 1) {
@@ -153,7 +154,7 @@ __device__ int MPI_File_open(MPI_Comm comm, const char *filename, int amode, MPI
             err_code = MPI_ERR_AMODE;
         }
 
-        if(err_code == 0){
+        if(err_code == MPI_SUCCESS){
             shared_fh.amode = amode;
             shared_fh.comm = comm;
 
@@ -207,11 +208,11 @@ __device__ int MPI_File_open(MPI_Comm comm, const char *filename, int amode, MPI
                     init_pos = __get_file_size(shared_fh.file);
                 }
                 // init_pos = 1;
+                shared_fh.views = (MPI_File_View*)malloc(size*sizeof(MPI_File_View)); 
                 for (int i = 0; i < size; i++){
                     shared_fh.seek_pos[i] = init_pos;
-                }
-
-                shared_fh.views = (MPI_FILE_VIEW*)malloc(size*sizeof(MPI_FILE_VIEW));                
+                    shared_fh.views[i] = MPI_File_View(0, MPI_CHAR, MPI_CHAR, "native");
+                }               
             }   
         }
         
@@ -234,7 +235,7 @@ __device__ int MPI_File_delete(const char *filename, MPI_Info info){
     if(rank == 0){
         // TODO: file not exist error
         int res = __delete_file(filename);
-        err_code = (res == 0) ? 0 : MPI_ERR_IO; 
+        err_code = (res == 0) ? MPI_SUCCESS : MPI_ERR_IO; 
     }
 
     MPI_Barrier(MPI_COMM_WORLD);
@@ -255,7 +256,7 @@ __device__ int MPI_File_get_size(MPI_File fh, MPI_Offset *size){
     MPI_Bcast(&sz, 1, MPI_INT, 0, fh.comm);
     *size = sz;
 
-    return 0;
+    return MPI_SUCCESS;
 } 
 
 __device__ int MPI_File_close(MPI_File *fh){
@@ -273,6 +274,7 @@ __device__ int MPI_File_close(MPI_File *fh){
         
         // release the fh object
         free(fh->seek_pos);
+        free(fh->views);
 
         __close_file(fh->file);
     }
@@ -287,38 +289,33 @@ __device__ int MPI_File_close(MPI_File *fh){
 __device__ int MPI_File_set_view(MPI_File fh, MPI_Offset disp, MPI_Datatype etype, MPI_Datatype filetype, const char *datarep, MPI_Info info){
     int rank;
     MPI_Comm_rank(fh.comm, &rank);
-    MPI_FILE_VIEW view;
-
     if((fh.amode & MPI_MODE_SEQUENTIAL) && disp == MPI_DISPLACEMENT_CURRENT){
         int position;
         MPI_File_get_position(fh, &position);
         disp = position/gpu_mpi::plainTypeSize(etype);
     }
-
-    view.disp = disp;
-    view.etype = etype;
-    view.filetype = filetype;
-    view.datarep = datarep;
-    fh.views[rank] = view;
+    fh.views[rank] = MPI_File_View(disp, etype, filetype, datarep);
     // resets the individual file pointers and the shared file pointer to zero
     MPI_File_seek(fh, 0, MPI_SEEK_SET);
 
-    return 0;
+    return MPI_SUCCESS;
 }
 
 __device__ int MPI_File_get_view(MPI_File fh, MPI_Offset *disp, MPI_Datatype *etype, MPI_Datatype *filetype, char *datarep){
     int rank;
     MPI_Comm_rank(fh.comm, &rank);
 
-    MPI_FILE_VIEW view = fh.views[rank];
+    MPI_File_View view = fh.views[rank];
     *disp = view.disp;
     *etype = view.etype;
     *filetype = view.filetype;
-    int datarep_size = 0;
-    while (view.datarep[datarep_size] != '\0') datarep_size++;
-    memcpy(datarep , view.datarep, datarep_size+1);
+    if(view.datarep){
+        int datarep_size = 0;
+        while (view.datarep[datarep_size] != '\0') datarep_size++;
+        memcpy(datarep , view.datarep, datarep_size+1);
+    }
 
-    return 0;
+    return MPI_SUCCESS;
 }
 
 
@@ -437,6 +434,16 @@ __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datat
     //TODO: step 4 error catching
     //#memory cosistency: assuming that write is not reordered with write
     return return_value;
+}
+
+__device__ int MPI_File_read_with_view(MPI_File fh, void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
+    // NOT_IMPLEMENTED;
+    return MPI_SUCCESS;
+}
+
+__device__ int MPI_File_write_with_view(MPI_File fh, const void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
+    // NOT_IMPLEMENTED;
+    return MPI_SUCCESS;
 }
 
 __device__ int MPI_File_read_at(MPI_File fh, MPI_Offset offset, void *buf, int count, MPI_Datatype datatype, MPI_Status *status){

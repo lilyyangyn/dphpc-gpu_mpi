@@ -119,6 +119,19 @@ struct FileView {
         MPI_File_open(MPI_COMM_WORLD, "test_file_view.out", 
                         MPI_MODE_CREATE | MPI_MODE_RDWR, 
                         info, &fh);
+
+        MPI_Datatype arraytype_before;
+        MPI_Datatype etype_before;
+        MPI_Offset disp_before;
+        char* datarep_before = (char *)malloc(N*sizeof(char));
+        MPI_File_get_view(fh, &disp_before, &etype_before, &arraytype_before, datarep_before);
+        assert(disp_before == 0);
+        assert(etype_before == MPI_CHAR);
+        assert(arraytype_before == MPI_CHAR);         
+        for(int i = 0; i < sizeof(datarep_before); i++){
+            assert(datarep_before[i]==datarep[i]);
+        }
+
         MPI_File_set_view(fh, disp, etype, arraytype, datarep, info);
 
         MPI_Datatype arraytype_get;
@@ -138,6 +151,7 @@ struct FileView {
 
         ok = true;
 
+        free(datarep_before);
         free(datarep_get);
         free(buf);
 

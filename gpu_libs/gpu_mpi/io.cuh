@@ -80,11 +80,14 @@ struct MPI_Info{
     // todo
 };  
 
-struct MPI_FILE_VIEW{
+struct MPI_File_View{
     MPI_Offset disp;
     MPI_Datatype etype;
     MPI_Datatype filetype;
     const char* datarep;
+    __device__ MPI_File_View(MPI_Offset disp, MPI_Datatype etype, MPI_Datatype filetype, const char* datarep)
+    :disp(disp),etype(etype),filetype(filetype),datarep(datarep){}
+    __device__ MPI_File_View(){}
 };
 
 struct MPI_File{
@@ -92,7 +95,7 @@ struct MPI_File{
     int* seek_pos;
     int amode;
     FILE* file;
-    MPI_FILE_VIEW* views;
+    MPI_File_View* views;
     // todo
 };
 
