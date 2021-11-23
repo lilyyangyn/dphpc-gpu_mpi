@@ -71,18 +71,28 @@
 #define I_FOPEN_MODE_RW_APPEND 3
 #define I_FOPEN_MODE_WD_APPEND 4
 
+#define MPI_DISPLACEMENT_CURRENT -1
+
 struct MPI_Status;
 namespace gpu_mpi { 
 }
 struct MPI_Info{
     // todo
-};    
+};  
+
+struct MPI_FILE_VIEW{
+    MPI_Offset disp;
+    MPI_Datatype etype;
+    MPI_Datatype filetype;
+    const char* datarep;
+};
 
 struct MPI_File{
     MPI_Comm comm;
     int* seek_pos;
     int amode;
     FILE* file;
+    MPI_FILE_VIEW* views;
     // todo
 };
 
@@ -115,6 +125,9 @@ __device__ int MPI_File_delete(const char *filename, MPI_Info info);
 __device__ int MPI_File_read_at(MPI_File fh, MPI_Offset offset, void *buf, int count, MPI_Datatype datatype, MPI_Status *status);
 __device__ int MPI_File_write_at(MPI_File fh, MPI_Offset offset, void *buf, int count, MPI_Datatype datatype, MPI_Status *status);
 
+// see documentation p503
+__device__ int MPI_File_set_view(MPI_File fh, MPI_Offset disp, MPI_Datatype etype, MPI_Datatype filetype, const char *datarep, MPI_Info info);
+__device__ int MPI_File_get_view(MPI_File fh, MPI_Offset *disp, MPI_Datatype *etype, MPI_Datatype *filetype, char *datarep);
 
 // see documentation p521
 __device__ int MPI_File_get_position(MPI_File fh, MPI_Offset *offset);

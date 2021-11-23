@@ -1,7 +1,7 @@
 #include "io.cuh"
+#include "datatypes.cuh"
 #include "../gpu_main/device_host_comm.cuh"
 #include <cassert>
-#include <cooperative_groups.h>
 
 // #include "mpi.cuh"
 #define N 100
@@ -144,6 +144,8 @@ __device__ int MPI_File_open(MPI_Comm comm, const char *filename, int amode, MPI
                 for (int i = 0; i < size; i++){
                     shared_fh.seek_pos[i] = init_pos;
                 }
+
+                shared_fh.views = (MPI_FILE_VIEW*)malloc(size*sizeof(MPI_FILE_VIEW));                
             }   
         }
         
@@ -428,5 +430,42 @@ __device__ int MPI_File_write_at(MPI_File fh, MPI_Offset offset, void *buf, int 
     if(ret != 0){
         return ret;
     }
+    return 0;
+}
+
+__device__ int MPI_File_set_view(MPI_File fh, MPI_Offset disp, MPI_Datatype etype, MPI_Datatype filetype, const char *datarep, MPI_Info info){
+    int rank;
+    MPI_Comm_rank(fh.comm, &rank);
+    MPI_FILE_VIEW view;
+
+    if((fh.amode & MPI_MODE_SEQUENTIAL) && disp == MPI_DISPLACEMENT_CURRENT){
+        int position;
+        MPI_File_get_position(fh, &position);
+        disp = position/gpu_mpi::plainTypeSize(etype);
+    }
+
+    view.disp = disp;
+    view.etype = etype;
+    view.filetype = filetype;
+    view.datarep = datarep;
+    fh.views[rank] = view;
+    // resets the individual file pointers and the shared file pointer to zero
+    MPI_File_seek(fh, 0, MPI_SEEK_SET);
+
+    return 0;
+}
+
+__device__ int MPI_File_get_view(MPI_File fh, MPI_Offset *disp, MPI_Datatype *etype, MPI_Datatype *filetype, char *datarep){
+    int rank;
+    MPI_Comm_rank(fh.comm, &rank);
+
+    MPI_FILE_VIEW view = fh.views[rank];
+    *disp = view.disp;
+    *etype = view.etype;
+    *filetype = view.filetype;
+    int datarep_size = 0;
+    while (view.datarep[datarep_size] != '\0') datarep_size++;
+    memcpy(datarep , view.datarep, datarep_size+1);
+
     return 0;
 }
