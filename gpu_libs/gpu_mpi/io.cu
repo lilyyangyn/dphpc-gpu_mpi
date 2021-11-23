@@ -7,6 +7,45 @@
 #define N 100
 namespace gpu_mpi {
 }
+
+/* ------HELPER FUNCTIONS------ */
+
+__device__ int __howManyBits(int x) {
+    assert(sizeof(int)==4);
+    return __double2int_ru(__log2f(x));
+    // int a = x >> 31;
+    // int newx = (x ^ a); //2
+    // int temp1 = !!(newx >> 16);//5
+    // int ntemp1 = ~temp1 + 1; //7
+    // int n = 16 & ntemp1;     //8
+    // int temp2 = !!(newx >> (8 + n)); //12
+    // int ntemp2 = ~temp2 + 1; //14
+    // int temp3 = 0;
+    // int ntemp3 = 0;
+    // int temp4 = 0;
+    // int ntemp4 = 0;
+    // int temp5 = 0;
+
+    // n = n + (ntemp2 & 8);
+    // temp3 = !!(newx >> (4 + n));
+    // ntemp3 = ~temp3 + 1;
+    // n = n + (ntemp3 & 4);
+    // temp4 = !!(newx >> (2 + n));
+    // ntemp4 = ~temp4 + 1;
+    // n = n + (ntemp4 & 2);
+    // temp5 = !!(newx >> (1 + n));
+    // n = n + temp5 + 1 + !!newx; 
+    // return n;
+}
+
+//for debug
+__device__ __host__ void __show_memory(char * mem, size_t size){
+    char *tmem = (char *)mem;
+    for(int i=0;i+7<size;i+=8){
+        printf("%02X  %02X  %02X  %02X  %02X  %02X  %02X  %02X\n",tmem[i],tmem[i+1],tmem[i+2],tmem[i+3],tmem[i+4],tmem[i+5],tmem[i+6],tmem[i+7]);
+    }
+}
+
 __device__ FILE* __open_file(const char* filename, int mode){
     if(filename == NULL){
         return nullptr;
@@ -58,6 +97,33 @@ __device__ long int __get_file_size(FILE* file){
     free_host_mem(data);
     return file_length;
 }
+
+__device__ int __delete_file(const char* filename){
+    if(filename == NULL){
+        return 0;
+    }
+    // TODO: ask cpu to remove the file
+    int buffer_size = 128;
+    char* data = (char*) allocate_host_mem(buffer_size);
+
+    ((int*)data)[0] = I_FDELETE;
+    // remove the file associated with filename
+    int filename_size = 0;
+    while (filename[filename_size] != '\0') filename_size++;
+    memcpy((const char**)data + 1, filename, filename_size + 1);
+    printf("C\n");
+    delegate_to_host((void*)data, buffer_size);
+    // wait
+    while(((int*)data)[0] != I_READY){};
+    //file remove done
+    int res = ((int*)data)[1];
+    free_host_mem(data);
+
+    return res;
+}
+
+
+/* ------FILE MANIPULATION------ */
 
 __device__ MPI_File shared_fh;
 __device__ int MPI_File_open(MPI_Comm comm, const char *filename, int amode, MPI_Info info, MPI_File *fh){
@@ -160,6 +226,104 @@ __device__ int MPI_File_open(MPI_Comm comm, const char *filename, int amode, MPI
     return err_code;
 }
 
+__device__ int MPI_File_delete(const char *filename, MPI_Info info){
+    int err_code; 
+
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    if(rank == 0){
+        // TODO: file not exist error
+        int res = __delete_file(filename);
+        err_code = (res == 0) ? 0 : MPI_ERR_IO; 
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Bcast(&err_code, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    return err_code;
+}
+
+__device__ int MPI_File_get_size(MPI_File fh, MPI_Offset *size){
+    int sz; 
+
+    int rank;
+    MPI_Comm_rank(fh.comm, &rank);
+    if(rank == 0){
+        sz = __get_file_size(fh.file);
+    }
+
+    MPI_Barrier(fh.comm);
+    MPI_Bcast(&sz, 1, MPI_INT, 0, fh.comm);
+    *size = sz;
+
+    return 0;
+} 
+
+__device__ int MPI_File_close(MPI_File *fh){
+    // synchronize file state
+    // __syncthreads();
+    MPI_Barrier(fh->comm);
+
+    int rank;
+    MPI_Comm_rank(fh->comm, &rank);
+
+    // only free the file handle object once
+    if(rank == 0){
+        // close the file associated with file handle
+        // fclose(fh->file);
+        
+        // release the fh object
+        free(fh->seek_pos);
+
+        __close_file(fh->file);
+    }
+    // __syncthreads();
+    MPI_Barrier(fh->comm);
+    return 0;
+}
+
+
+/* ------FILE VIEWS------ */
+
+__device__ int MPI_File_set_view(MPI_File fh, MPI_Offset disp, MPI_Datatype etype, MPI_Datatype filetype, const char *datarep, MPI_Info info){
+    int rank;
+    MPI_Comm_rank(fh.comm, &rank);
+    MPI_FILE_VIEW view;
+
+    if((fh.amode & MPI_MODE_SEQUENTIAL) && disp == MPI_DISPLACEMENT_CURRENT){
+        int position;
+        MPI_File_get_position(fh, &position);
+        disp = position/gpu_mpi::plainTypeSize(etype);
+    }
+
+    view.disp = disp;
+    view.etype = etype;
+    view.filetype = filetype;
+    view.datarep = datarep;
+    fh.views[rank] = view;
+    // resets the individual file pointers and the shared file pointer to zero
+    MPI_File_seek(fh, 0, MPI_SEEK_SET);
+
+    return 0;
+}
+
+__device__ int MPI_File_get_view(MPI_File fh, MPI_Offset *disp, MPI_Datatype *etype, MPI_Datatype *filetype, char *datarep){
+    int rank;
+    MPI_Comm_rank(fh.comm, &rank);
+
+    MPI_FILE_VIEW view = fh.views[rank];
+    *disp = view.disp;
+    *etype = view.etype;
+    *filetype = view.filetype;
+    int datarep_size = 0;
+    while (view.datarep[datarep_size] != '\0') datarep_size++;
+    memcpy(datarep , view.datarep, datarep_size+1);
+
+    return 0;
+}
+
+
+/* ------DATA ACCESS------ */
+
 __device__ int MPI_File_seek(MPI_File fh, MPI_Offset offset, int whence){
     if(fh.amode & MPI_MODE_SEQUENTIAL){
         return MPI_ERR_UNSUPPORTED_OPERATION;
@@ -242,42 +406,6 @@ __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype dat
     return ret;
 }
 
-__device__ int __howManyBits(int x) {
-    assert(sizeof(int)==4);
-    return __double2int_ru(__log2f(x));
-    // int a = x >> 31;
-    // int newx = (x ^ a); //2
-    // int temp1 = !!(newx >> 16);//5
-    // int ntemp1 = ~temp1 + 1; //7
-    // int n = 16 & ntemp1;     //8
-    // int temp2 = !!(newx >> (8 + n)); //12
-    // int ntemp2 = ~temp2 + 1; //14
-    // int temp3 = 0;
-    // int ntemp3 = 0;
-    // int temp4 = 0;
-    // int ntemp4 = 0;
-    // int temp5 = 0;
-
-    // n = n + (ntemp2 & 8);
-    // temp3 = !!(newx >> (4 + n));
-    // ntemp3 = ~temp3 + 1;
-    // n = n + (ntemp3 & 4);
-    // temp4 = !!(newx >> (2 + n));
-    // ntemp4 = ~temp4 + 1;
-    // n = n + (ntemp4 & 2);
-    // temp5 = !!(newx >> (1 + n));
-    // n = n + temp5 + 1 + !!newx; 
-    // return n;
-}
-
-//for debug
-__device__ __host__ void __show_memory(char * mem, size_t size){
-    char *tmem = (char *)mem;
-    for(int i=0;i+7<size;i+=8){
-        printf("%02X  %02X  %02X  %02X  %02X  %02X  %02X  %02X\n",tmem[i],tmem[i+1],tmem[i+2],tmem[i+3],tmem[i+4],tmem[i+5],tmem[i+6],tmem[i+7]);
-    }
-}
-
 //not thread safe
 __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
     int rank;
@@ -310,85 +438,6 @@ __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datat
     //#memory cosistency: assuming that write is not reordered with write
     return return_value;
 }
-
-__device__ int __delete_file(const char* filename){
-    if(filename == NULL){
-        return 0;
-    }
-    // TODO: ask cpu to remove the file
-    int buffer_size = 128;
-    char* data = (char*) allocate_host_mem(buffer_size);
-
-    ((int*)data)[0] = I_FDELETE;
-    // remove the file associated with filename
-    int filename_size = 0;
-    while (filename[filename_size] != '\0') filename_size++;
-    memcpy((const char**)data + 1, filename, filename_size + 1);
-    printf("C\n");
-    delegate_to_host((void*)data, buffer_size);
-    // wait
-    while(((int*)data)[0] != I_READY){};
-    //file remove done
-    int res = ((int*)data)[1];
-    free_host_mem(data);
-
-    return res;
-}
-
-__device__ int MPI_File_delete(const char *filename, MPI_Info info){
-    int err_code; 
-
-    int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    if(rank == 0){
-        // TODO: file not exist error
-        int res = __delete_file(filename);
-        err_code = (res == 0) ? 0 : MPI_ERR_IO; 
-    }
-
-    MPI_Barrier(MPI_COMM_WORLD);
-    MPI_Bcast(&err_code, 1, MPI_INT, 0, MPI_COMM_WORLD);
-    return err_code;
-}
-
-__device__ int MPI_File_close(MPI_File *fh){
-    // synchronize file state
-    // __syncthreads();
-    MPI_Barrier(fh->comm);
-
-    int rank;
-    MPI_Comm_rank(fh->comm, &rank);
-
-    // only free the file handle object once
-    if(rank == 0){
-        // close the file associated with file handle
-        // fclose(fh->file);
-        
-        // release the fh object
-        free(fh->seek_pos);
-
-        __close_file(fh->file);
-    }
-    // __syncthreads();
-    MPI_Barrier(fh->comm);
-    return 0;
-}
-
-__device__ int MPI_File_get_size(MPI_File fh, MPI_Offset *size){
-    int sz; 
-
-    int rank;
-    MPI_Comm_rank(fh.comm, &rank);
-    if(rank == 0){
-        sz = __get_file_size(fh.file);
-    }
-
-    MPI_Barrier(fh.comm);
-    MPI_Bcast(&sz, 1, MPI_INT, 0, fh.comm);
-    *size = sz;
-
-    return 0;
-} 
 
 __device__ int MPI_File_read_at(MPI_File fh, MPI_Offset offset, void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
     MPI_Offset old_offset;
@@ -433,39 +482,3 @@ __device__ int MPI_File_write_at(MPI_File fh, MPI_Offset offset, void *buf, int 
     return 0;
 }
 
-__device__ int MPI_File_set_view(MPI_File fh, MPI_Offset disp, MPI_Datatype etype, MPI_Datatype filetype, const char *datarep, MPI_Info info){
-    int rank;
-    MPI_Comm_rank(fh.comm, &rank);
-    MPI_FILE_VIEW view;
-
-    if((fh.amode & MPI_MODE_SEQUENTIAL) && disp == MPI_DISPLACEMENT_CURRENT){
-        int position;
-        MPI_File_get_position(fh, &position);
-        disp = position/gpu_mpi::plainTypeSize(etype);
-    }
-
-    view.disp = disp;
-    view.etype = etype;
-    view.filetype = filetype;
-    view.datarep = datarep;
-    fh.views[rank] = view;
-    // resets the individual file pointers and the shared file pointer to zero
-    MPI_File_seek(fh, 0, MPI_SEEK_SET);
-
-    return 0;
-}
-
-__device__ int MPI_File_get_view(MPI_File fh, MPI_Offset *disp, MPI_Datatype *etype, MPI_Datatype *filetype, char *datarep){
-    int rank;
-    MPI_Comm_rank(fh.comm, &rank);
-
-    MPI_FILE_VIEW view = fh.views[rank];
-    *disp = view.disp;
-    *etype = view.etype;
-    *filetype = view.filetype;
-    int datarep_size = 0;
-    while (view.datarep[datarep_size] != '\0') datarep_size++;
-    memcpy(datarep , view.datarep, datarep_size+1);
-
-    return 0;
-}
