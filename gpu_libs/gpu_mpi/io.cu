@@ -287,6 +287,9 @@ __device__ int MPI_File_close(MPI_File *fh){
 /* ------FILE VIEWS------ */
 
 __device__ int MPI_File_set_view(MPI_File fh, MPI_Offset disp, MPI_Datatype etype, MPI_Datatype filetype, const char *datarep, MPI_Info info){
+    // now only support single type repitition
+    assert(etype == filetype);
+
     int rank;
     MPI_Comm_rank(fh.comm, &rank);
     if((fh.amode & MPI_MODE_SEQUENTIAL) && disp == MPI_DISPLACEMENT_CURRENT){
@@ -333,7 +336,9 @@ __device__ int MPI_File_seek(MPI_File fh, MPI_Offset offset, int whence){
             // see documentation p521 line 11
             return MPI_ERR_UNSUPPORTED_OPERATION;
         }
-        fh.seek_pos[rank] = offset;
+        // the offset is corresponding to the thread's view
+        // fh.seek_pos[rank] = offset;
+        fh.seek_pos[rank] = fh.views[rank].disp + offset;
     }else if(whence == MPI_SEEK_CUR){
         int new_offset = fh.seek_pos[rank] + offset;
         if(new_offset < 0){
@@ -351,7 +356,7 @@ __device__ int MPI_File_seek(MPI_File fh, MPI_Offset offset, int whence){
         fh.seek_pos[rank] = new_offset;
     }
 
-    return 0;
+    return MPI_SUCCESS;
 }
 
 __device__ int MPI_File_get_position(MPI_File fh, MPI_Offset *offset){
@@ -386,6 +391,9 @@ __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype dat
     // r_param.fh = fh;  r_param.datatype = datatype;  r_param.count = count;
     // r_param.buf = data + sizeof(int) + sizeof(r_param);  // CPU cannot directly write into buf, so write into mem first
     // *((int*)data) = I_FREAD;
+    
+    // If seek_pos smaller than the start of the valid area of the thread's view, then seek to the beginning
+    fh.seek_pos[rank] = fh.seek_pos[rank] < fh.views[rank].disp ? fh.views[rank].disp : fh.seek_pos[rank];
     __rw_params r_params(I_READY,fh.file,datatype,data + sizeof(__rw_params),count,fh.seek_pos[rank]);
     *((__rw_params*)data) = r_params;
     
@@ -416,6 +424,8 @@ __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datat
     //init
     char* data = (char*) allocate_host_mem(buffer_size);
     //assemble metadata TODO: why we need to re-seek every time? is there redundant seek?
+    // If seek_pos smaller than the start of the valid area of the thread's view, then seek to the beginning
+    fh.seek_pos[rank] = fh.seek_pos[rank] < fh.views[rank].disp ? fh.views[rank].disp : fh.seek_pos[rank];
     __rw_params w_params(I_FWRITE,fh.file,datatype,data + sizeof(__rw_params),count,fh.seek_pos[rank]);
     //embed metadata
     *((__rw_params*)data) = w_params;

@@ -29,10 +29,10 @@ struct FileRead {
     }
 };
 
-TEST_CASE("FileRead", "[FileRead]") {
-    TestRunner testRunner(1);
-    testRunner.run<FileRead>();
-}
+// TEST_CASE("FileRead", "[FileRead]") {
+//     TestRunner testRunner(1);
+//     testRunner.run<FileRead>();
+// }
 
 struct FileReadAmodeIncorrect {
     static __device__ void run(bool& ok) {
@@ -87,12 +87,12 @@ struct FileSize {
     }
 };
 
-TEST_CASE("FileSize", "[FileSize]") {
-    TestRunner testRunner(2);
-    testRunner.run<FileSize>();
-}
+// TEST_CASE("FileSize", "[FileSize]") {
+//     TestRunner testRunner(2);
+//     testRunner.run<FileSize>();
+// }
 
-struct FileView {
+struct FileViewSetter {
     static __device__ void run(bool& ok) {
         MPI_Datatype arraytype;
         MPI_Datatype etype;
@@ -159,7 +159,51 @@ struct FileView {
     }
 };
 
-TEST_CASE("FileView", "[FileView]") {
-    TestRunner testRunner(1);
-    testRunner.run<FileView>();
+// TEST_CASE("FileViewSetter", "[FileViewSetter]") {
+//     TestRunner testRunner(1);
+//     testRunner.run<FileViewSetter>();
+// }
+
+struct FileViewRW {
+    static __device__ void run(bool& ok) {
+        MPI_Datatype arraytype;
+        MPI_Datatype etype;
+        MPI_Offset disp;
+        MPI_File fh;
+        MPI_Info info;
+        int rank;
+        int N = 10;
+        MPI_Init(0, 0);
+        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+        etype = MPI_CHAR;
+        arraytype = etype;
+        disp = rank*plainTypeSize(etype)*N; 
+        const char* datarep = "native";
+
+        char* wbuf = (char *)malloc(N*plainTypeSize(etype));
+        char* rbuf = (char *)malloc(N*plainTypeSize(etype));
+        for (int i=0;i<N;i++){
+            wbuf[i]=('0' + rank);
+        }
+        
+        MPI_File_open(MPI_COMM_WORLD, "viewwrite.txt", MPI_MODE_RDWR | MPI_MODE_CREATE, info, &fh);
+        MPI_File_set_view(fh, disp, etype, arraytype, datarep, info);
+
+        MPI_File_write(fh, wbuf, N, etype, nullptr);
+
+        MPI_File_read(fh, rbuf, N, etype, nullptr);
+
+        MPI_File_close(&fh);
+
+        printf("write: %s, read: %s\n", wbuf, rbuf);
+
+        ok = *wbuf==*rbuf;
+
+        MPI_Finalize();
+    }
+};
+
+TEST_CASE("FileViewRW", "[FileViewRW]") {
+    TestRunner testRunner(2);
+    testRunner.run<FileViewRW>();
 }
