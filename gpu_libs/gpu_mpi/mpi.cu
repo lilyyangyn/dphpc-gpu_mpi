@@ -234,13 +234,18 @@ __device__ int MPI_Reduce(const void *sendbuf, void *recvbuf, int count,
     return MPI_SUCCESS;
 }
 
-__device__ int MPI_Type_contiguous(int count, MPI_Datatype oldtype, MPI_Datatype *newtype) {
-    NOT_IMPLEMENTED;
+// extern std::list<MPI_Datatype_Ext*> Typelist;
+
+__device__ int MPI_Type_contiguous(int count, MPI_Datatype_Ext oldtype, MPI_Datatype_Ext *newtype) {
+    newtype -> _size = count * oldtype.size();
+    newtype -> __basic_type = -1;
+    newtype -> committed = false;
     return MPI_SUCCESS;
 }
 
-__device__ int MPI_Type_commit(MPI_Datatype *datatype) {
-    NOT_IMPLEMENTED;
+__device__ int MPI_Type_commit(MPI_Datatype_Ext *datatype) {
+    if (datatype -> committed == true) return MPI_SUCCESS;
+    datatype -> committed = true;  // Typelist.push_back(datatype);
     return MPI_SUCCESS;
 }
 

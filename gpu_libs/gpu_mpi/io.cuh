@@ -82,10 +82,10 @@ struct MPI_Info{
 
 struct MPI_File_View{
     MPI_Offset disp;
-    MPI_Datatype etype;
-    MPI_Datatype filetype;
+    MPI_Datatype_Ext etype;
+    MPI_Datatype_Ext filetype;
     const char* datarep;
-    __device__ MPI_File_View(MPI_Offset disp, MPI_Datatype etype, MPI_Datatype filetype, const char* datarep)
+    __device__ MPI_File_View(MPI_Offset disp, MPI_Datatype_Ext etype, MPI_Datatype_Ext filetype, const char* datarep)
     :disp(disp),etype(etype),filetype(filetype),datarep(datarep){}
     __device__ MPI_File_View(){}
 };
@@ -134,8 +134,8 @@ __device__ int MPI_File_get_size(MPI_File fh, MPI_Offset *size);
 /* ------FILE VIEWS------ */
 
 // see documentation p503
-__device__ int MPI_File_set_view(MPI_File fh, MPI_Offset disp, MPI_Datatype etype, MPI_Datatype filetype, const char *datarep, MPI_Info info);
-__device__ int MPI_File_get_view(MPI_File fh, MPI_Offset *disp, MPI_Datatype *etype, MPI_Datatype *filetype, char *datarep);
+__device__ int MPI_File_set_view(MPI_File fh, MPI_Offset disp, MPI_Datatype_Ext etype, MPI_Datatype_Ext filetype, const char *datarep, MPI_Info info);
+__device__ int MPI_File_get_view(MPI_File fh, MPI_Offset *disp, MPI_Datatype_Ext *etype, MPI_Datatype_Ext *filetype, char *datarep);
 
 
 /* ------DATA ACCESS------ */

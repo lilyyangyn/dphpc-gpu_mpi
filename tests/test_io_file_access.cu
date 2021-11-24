@@ -120,8 +120,8 @@ struct FileViewSetter {
                         MPI_MODE_CREATE | MPI_MODE_RDWR, 
                         info, &fh);
 
-        MPI_Datatype arraytype_before;
-        MPI_Datatype etype_before;
+        MPI_Datatype_Ext arraytype_before;
+        MPI_Datatype_Ext etype_before;
         MPI_Offset disp_before;
         char* datarep_before = (char *)malloc(N*sizeof(char));
         MPI_File_get_view(fh, &disp_before, &etype_before, &arraytype_before, datarep_before);
@@ -134,8 +134,8 @@ struct FileViewSetter {
 
         MPI_File_set_view(fh, disp, etype, arraytype, datarep, info);
 
-        MPI_Datatype arraytype_get;
-        MPI_Datatype etype_get;
+        MPI_Datatype_Ext arraytype_get;
+        MPI_Datatype_Ext etype_get;
         MPI_Offset disp_get;
         char* datarep_get = (char *)malloc(N*sizeof(char));
         MPI_File_get_view(fh, &disp_get, &etype_get, &arraytype_get, datarep_get);

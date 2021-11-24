@@ -297,16 +297,16 @@ __device__ int MPI_File_close(MPI_File *fh){
 
 /* ------FILE VIEWS------ */
 
-__device__ int MPI_File_set_view(MPI_File fh, MPI_Offset disp, MPI_Datatype etype, MPI_Datatype filetype, const char *datarep, MPI_Info info){
+__device__ int MPI_File_set_view(MPI_File fh, MPI_Offset disp, MPI_Datatype_Ext etype, MPI_Datatype_Ext filetype, const char *datarep, MPI_Info info){
     // now only support single type repitition
-    assert(etype == filetype);
+    // assert(etype == filetype);
 
     int rank;
     MPI_Comm_rank(fh.comm, &rank);
     if((fh.amode & MPI_MODE_SEQUENTIAL) && disp == MPI_DISPLACEMENT_CURRENT){
         int position;
         MPI_File_get_position(fh, &position);
-        disp = position/gpu_mpi::plainTypeSize(etype);
+        disp = position/gpu_mpi::TypeSize(etype);
     }
     fh.views[rank] = MPI_File_View(disp, etype, filetype, datarep);
     // resets the individual file pointers and the shared file pointer to zero
@@ -315,7 +315,7 @@ __device__ int MPI_File_set_view(MPI_File fh, MPI_Offset disp, MPI_Datatype etyp
     return MPI_SUCCESS;
 }
 
-__device__ int MPI_File_get_view(MPI_File fh, MPI_Offset *disp, MPI_Datatype *etype, MPI_Datatype *filetype, char *datarep){
+__device__ int MPI_File_get_view(MPI_File fh, MPI_Offset *disp, MPI_Datatype_Ext *etype, MPI_Datatype_Ext *filetype, char *datarep){
     int rank;
     MPI_Comm_rank(fh.comm, &rank);
 

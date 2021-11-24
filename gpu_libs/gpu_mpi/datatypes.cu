@@ -14,6 +14,8 @@ __device__ int plainTypeSize(MPI_Datatype type) {
     }
 }
 
+__device__ int TypeSize(MPI_Datatype_Ext type) { return type.size(); }
+// std::list<MPI_Datatype_Ext*> Typelist;
 
 #undef MPI_TYPES_SIZE_F
 #undef MPI_TYPES_SIZE_SEP
