@@ -29,10 +29,10 @@ struct FileRead {
     }
 };
 
-// TEST_CASE("FileRead", "[FileRead]") {
-//     TestRunner testRunner(1);
-//     testRunner.run<FileRead>();
-// }
+TEST_CASE("FileRead", "[FileRead]") {
+    TestRunner testRunner(1);
+    testRunner.run<FileRead>();
+}
 
 struct FileReadAmodeIncorrect {
     static __device__ void run(bool& ok) {
@@ -87,10 +87,10 @@ struct FileSize {
     }
 };
 
-// TEST_CASE("FileSize", "[FileSize]") {
-//     TestRunner testRunner(2);
-//     testRunner.run<FileSize>();
-// }
+TEST_CASE("FileSize", "[FileSize]") {
+    TestRunner testRunner(2);
+    testRunner.run<FileSize>();
+}
 
 struct FileViewSetter {
     static __device__ void run(bool& ok) {
@@ -159,10 +159,10 @@ struct FileViewSetter {
     }
 };
 
-// TEST_CASE("FileViewSetter", "[FileViewSetter]") {
-//     TestRunner testRunner(1);
-//     testRunner.run<FileViewSetter>();
-// }
+TEST_CASE("FileViewSetter", "[FileViewSetter]") {
+    TestRunner testRunner(1);
+    testRunner.run<FileViewSetter>();
+}
 
 struct FileViewRW {
     static __device__ void run(bool& ok) {
@@ -175,29 +175,43 @@ struct FileViewRW {
         int N = 10;
         MPI_Init(0, 0);
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-        etype = MPI_CHAR;
+        // etype = MPI_CHAR;
+        etype = MPI_INT;
         arraytype = etype;
         disp = rank*plainTypeSize(etype)*N; 
         const char* datarep = "native";
 
-        char* wbuf = (char *)malloc(N*plainTypeSize(etype));
-        char* rbuf = (char *)malloc(N*plainTypeSize(etype));
+        // char* wbuf = (char *)malloc(N*plainTypeSize(etype));
+        // char* rbuf = (char *)malloc(N*plainTypeSize(etype));
+        // for (int i=0;i<N;i++){
+        //     wbuf[i]=('0' + rank);
+        // }
+        int* wbuf = (int *)malloc(N*plainTypeSize(etype));
+        int* rbuf = (int *)malloc(N*plainTypeSize(etype));
         for (int i=0;i<N;i++){
-            wbuf[i]=('0' + rank);
+            wbuf[i]=rank;
         }
         
         MPI_File_open(MPI_COMM_WORLD, "viewwrite.txt", MPI_MODE_RDWR | MPI_MODE_CREATE, info, &fh);
         MPI_File_set_view(fh, disp, etype, arraytype, datarep, info);
 
         MPI_File_write(fh, wbuf, N, etype, nullptr);
-
         MPI_File_read(fh, rbuf, N, etype, nullptr);
+
+        // int wbuf = rank;
+        // int rbuf = -1;
+        // MPI_File_write(fh, &wbuf, 1, etype, nullptr);
+        // MPI_File_read(fh, &rbuf, 1, etype, nullptr);
 
         MPI_File_close(&fh);
 
-        printf("write: %s, read: %s\n", wbuf, rbuf);
+        // printf("write: %d, read: %d\n", wbuf, rbuf);
 
         ok = *wbuf==*rbuf;
+        // ok = wbuf==rbuf;
+
+        free(wbuf);
+        free(rbuf);
 
         MPI_Finalize();
     }

@@ -34,10 +34,10 @@ void process_gpu_libc(void* mem, size_t size) {
         char * data = (char *)mem;
         __rw_params w_params = *((__rw_params*)data);
         // //TODO: MPI_Type_size not implemented
-        assert(w_params.datatype==MPI_CHAR);
+        // assert(w_params.datatype==MPI_CHAR);
         //seek pos
         fseek(w_params.file,w_params.seek_pos,SEEK_SET);
-        ((size_t*)mem)[1] = fwrite( w_params.buf, sizeof(char), w_params.count, w_params.file);
+        ((size_t*)mem)[1] = fwrite( w_params.buf, w_params.etype_size, w_params.count, w_params.file);
         set_i_ready_flag(mem);
     }
     if(get_i_flag(mem) == I_FOPEN){
@@ -69,7 +69,7 @@ void process_gpu_libc(void* mem, size_t size) {
         // } r_param = *((rw_params*)((char*)mem + sizeof(int)));
         __rw_params r_params = *((__rw_params*)mem);
         fseek(r_params.file,r_params.seek_pos,SEEK_SET);
-        ((size_t*)mem)[1] = fread(r_params.buf, sizeof(char), r_params.count, r_params.file);
+        ((size_t*)mem)[1] = fread(r_params.buf, r_params.etype_size, r_params.count, r_params.file);
         // p507 l42
         // nb. fread() forwards the file pointer, so no need to manually forward it.
         

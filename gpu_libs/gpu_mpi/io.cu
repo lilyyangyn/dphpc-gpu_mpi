@@ -387,7 +387,7 @@ __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype dat
     // TODO: Only one thread with RDWR can gain access; unlimited threads with RDONLY can gain access (?)
     // TODO: write into MPI_Status
 
-    assert(datatype == MPI_CHAR);  // TODO: adapt to different datatypes
+    // assert(datatype == MPI_CHAR);  // TODO: adapt to different datatypes
     int buffer_size = 2048;  // sizeof(int) + sizeof(r_param) + sizeof(char) * (count + 1);: misaligned address
         // (TODO: dynamic size) sizeof(datatype) * (count + 1);
     char* data = (char*)allocate_host_mem(buffer_size);
@@ -405,7 +405,8 @@ __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype dat
     
     // If seek_pos smaller than the start of the valid area of the thread's view, then seek to the beginning
     fh.seek_pos[rank] = fh.seek_pos[rank] < fh.views[rank].disp ? fh.views[rank].disp : fh.seek_pos[rank];
-    __rw_params r_params(I_READY,fh.file,datatype,data + sizeof(__rw_params),count,fh.seek_pos[rank]);
+    // __rw_params r_params(I_READY,fh.file,datatype,data + sizeof(__rw_params),count,fh.seek_pos[rank]);
+    __rw_params r_params(I_READY,fh.file,gpu_mpi::plainTypeSize(datatype),data + sizeof(__rw_params),count,fh.seek_pos[rank]);
     *((__rw_params*)data) = r_params;
     
     delegate_to_host(data, buffer_size);
@@ -414,7 +415,7 @@ __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype dat
         // blocking wait (p506 l44)
     }
 
-    memcpy(buf, r_params.buf, count);  // sizeof(datatype) * count);
+    memcpy(buf, r_params.buf, gpu_mpi::plainTypeSize(datatype) * count);  // sizeof(datatype) * count);
     size_t ret = ((size_t*)data)[1];
     // if (fh.seek_pos != nullptr) *(fh.seek_pos) += ret;  // TODO fh.seek_pos shouldn't be nullptr. Why it is?
     fh.seek_pos[rank]+=ret;
@@ -430,19 +431,20 @@ __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datat
     int buffer_size = 2048;
     // int MPI_Type_size(MPI_Datatype datatype, int *size)
     //TODO: MPI_Type_size not implemented
-    assert(datatype==MPI_CHAR);
-    assert(buffer_size > sizeof(int*)*2+sizeof(FILE**)+sizeof(char)*count);
+    // assert(datatype==MPI_CHAR);
+    assert(buffer_size > sizeof(int*)*2+sizeof(FILE**)+gpu_mpi::plainTypeSize(datatype)*count);
     //init
     char* data = (char*) allocate_host_mem(buffer_size);
     //assemble metadata TODO: why we need to re-seek every time? is there redundant seek?
     // If seek_pos smaller than the start of the valid area of the thread's view, then seek to the beginning
     fh.seek_pos[rank] = fh.seek_pos[rank] < fh.views[rank].disp ? fh.views[rank].disp : fh.seek_pos[rank];
-    __rw_params w_params(I_FWRITE,fh.file,datatype,data + sizeof(__rw_params),count,fh.seek_pos[rank]);
+    // __rw_params w_params(I_FWRITE,fh.file,datatype,data + sizeof(__rw_params),count,fh.seek_pos[rank]);
+    __rw_params w_params(I_FWRITE,fh.file,gpu_mpi::plainTypeSize(datatype),data + sizeof(__rw_params),count,fh.seek_pos[rank]);
     //embed metadata
     *((__rw_params*)data) = w_params;
     // memcpy(data, (void*)&w_params, sizeof(__rw_params));
     //embed data
-    memcpy(data+sizeof(__rw_params), buf, sizeof(char)*count);
+    memcpy(data+sizeof(__rw_params), buf, gpu_mpi::plainTypeSize(datatype)*count);
 
     //execute on CPU
     delegate_to_host((void*)data, buffer_size);
@@ -455,16 +457,6 @@ __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datat
     //TODO: step 4 error catching
     //#memory cosistency: assuming that write is not reordered with write
     return return_value;
-}
-
-__device__ int MPI_File_read_with_view(MPI_File fh, void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
-    // NOT_IMPLEMENTED;
-    return MPI_SUCCESS;
-}
-
-__device__ int MPI_File_write_with_view(MPI_File fh, const void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
-    // NOT_IMPLEMENTED;
-    return MPI_SUCCESS;
 }
 
 __device__ int MPI_File_read_at(MPI_File fh, MPI_Offset offset, void *buf, int count, MPI_Datatype datatype, MPI_Status *status){

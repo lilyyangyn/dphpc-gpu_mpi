@@ -107,12 +107,16 @@ struct MPI_File{
 struct __rw_params {
     int acttype;
     FILE* file;
-    MPI_Datatype datatype;
+    // MPI_Datatype datatype;
+    // MPI_Datatype datatype;
+    int etype_size;
     void* buf;
     int count;
     int seek_pos;
-    __device__ __rw_params(int a,FILE* f, MPI_Datatype d, void*b, int c, int s)
-    :acttype(a),file(f),datatype(d),buf(b),count(c),seek_pos(s){}
+    // __device__ __rw_params(int a,FILE* f, MPI_Datatype d, void*b, int c, int s)
+    // :acttype(a),file(f),datatype(d),buf(b),count(c),seek_pos(s){}
+    __device__ __rw_params(int a,FILE* f, int d, void*b, int c, int s)
+    :acttype(a),file(f),etype_size(d),buf(b),count(c),seek_pos(s){}
 };
 
 /* ------FILE MANIPULATION------ */
