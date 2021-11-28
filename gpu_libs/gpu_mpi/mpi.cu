@@ -238,8 +238,24 @@ __device__ int MPI_Reduce(const void *sendbuf, void *recvbuf, int count,
 
 __device__ int MPI_Type_contiguous(int count, MPI_Datatype_Ext oldtype, MPI_Datatype_Ext *newtype) {
     newtype -> _size = count * oldtype.size();
-    newtype -> __basic_type = -1;
+    newtype -> typemap_len = count * oldtype.typemap_len;
+    for (int i = 0; i < count; i++) copy_typemap_once(newtype, oldtype, i);
     newtype -> committed = false;
+    return MPI_SUCCESS;
+}
+
+__device__ int MPI_Type_vector(int count, int blocklength, int stride, MPI_Datatype_Ext oldtype, MPI_Datatype_Ext *newtype) {
+    if (stride < blocklength) return MPI_ERR_OTHER;
+    // In all our use cases, we do not allow a typemap to overlap itself.
+
+    newtype -> _size = count * stride * oldtype.size();
+    newtype -> committed = false;
+
+    newtype -> typemap_len = count * stride * oldtype.typemap_len;
+    for (int i = 0; i < count; i++)
+        for (int j = 0; j < blocklength; j++)
+            copy_typemap_once(newtype, oldtype, i * stride + j);
+    
     return MPI_SUCCESS;
 }
 
