@@ -84,14 +84,20 @@ namespace gpu_mpi {
 }
     struct MPI_Info{
         // todo
-    };    
+    }; 
+
+    struct BufBlock{
+        void* block;
+        unsigned int lock;
+    };   
     
     struct MPI_File{
         MPI_Comm    comm;
         int*        seek_pos;
         int         amode;
         FILE*       file;
-        void**      buffer; // points to the buffer of the file blocks
+        BufBlock*   buffer; // points to the buffer of the file blocks
+        // void**      buffer;
         int*        status; // status of each block: NOT_IN/ CLEAN/ DIRTY
         int*        num_blocks;   // number of blocks
         const char* filename;

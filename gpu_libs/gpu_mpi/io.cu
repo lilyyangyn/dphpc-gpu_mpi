@@ -8,13 +8,22 @@
 namespace gpu_mpi {
 }
 
+    // __device__ void sleep(int64_t num_cycles)
+    // {
+    //     int64_t cycles = 0;
+    //     int64_t start = clock64();
+    //     while(cycles < num_cycles) {
+    //         cycles = clock64() - start;
+    //     }
+    // }
     __device__ void mutex_lock(unsigned int *mutex) {
-        unsigned int ns = 8;
-        // spining!
+        // unsigned int nc = 8;
+        // spinning!
         while (atomicCAS(mutex, 0, 1) == 1) {
-            //__nanosleep(ns);
-            // if (ns < 256) {
-            //     ns *= 2;
+            // sleep(nc);
+            // //__nanosleep(ns);
+            // if (nc < 256) {
+            //     nc *= 2;
             // }
         }
     }
@@ -169,10 +178,12 @@ namespace gpu_mpi {
                     *(shared_fh.num_blocks) = INIT_BUFFER_BLOCK_NUM;
                     shared_fh.shared_seek_pos = (int*)malloc(sizeof(int));
                     *(shared_fh.shared_seek_pos) = init_pos;
-                    shared_fh.buffer = (void**)malloc(INIT_BUFFER_BLOCK_NUM * sizeof(void*));
+                    shared_fh.buffer = (BufBlock*)malloc(INIT_BUFFER_BLOCK_NUM * sizeof(BufBlock));
+                    // shared_fh.buffer = (void**)malloc(INIT_BUFFER_BLOCK_NUM * sizeof(void*));
                     shared_fh.status = (int*)malloc(INIT_BUFFER_BLOCK_NUM * sizeof(int));
                     for(int i = 0; i < INIT_BUFFER_BLOCK_NUM; i++){
-                        shared_fh.buffer[i] = nullptr;
+                        shared_fh.buffer[i].block = nullptr;
+                        // shared_fh.buffer[i] = nullptr;
                         shared_fh.status[i] = BLOCK_NOT_IN;
                     }
                 }   
@@ -236,7 +247,7 @@ namespace gpu_mpi {
         char* data = (char*) allocate_host_mem(buffer_size);
         ((int*)data)[0] = I_FREAD;
         ((FILE**)data)[1] = fh->file;
-        ((void**)data)[2] = fh->buffer[block_index];
+        ((void**)data)[2] = fh->buffer[block_index].block;
         ((int*)data)[6] = seekpos;
         delegate_to_host((void*)data, buffer_size);
         // wait
@@ -249,13 +260,13 @@ namespace gpu_mpi {
         // check whether the whole block is in buffer
         if(fh->status[block_index] == BLOCK_NOT_IN){
             // data not in buffer, read to from cpu
-            fh->buffer[block_index] = allocate_host_mem(INIT_BUFFER_BLOCK_SIZE);
+            fh->buffer[block_index].block = allocate_host_mem(INIT_BUFFER_BLOCK_SIZE);
             __read_file(fh, block_index, seekpos);
             fh->status[block_index] = BLOCK_IN_CLEAN;
         }
 
         // data in buffer
-        void* buffer_start = fh->buffer[block_index];
+        void* buffer_start = fh->buffer[block_index].block;
         buffer_start = (char*)buffer_start + start;
         memcpy(buf, buffer_start, count);   
         // printf("%s", "__read_block succeed\n");     
@@ -273,6 +284,7 @@ namespace gpu_mpi {
         int cur_block = cur_pos / INIT_BUFFER_BLOCK_SIZE;
         int block_offset = cur_pos % INIT_BUFFER_BLOCK_SIZE;
 
+        // TODO: make it support read part of the block
         // for now only support read the whole block
         assert(block_offset == 0);
         assert(count % INIT_BUFFER_BLOCK_SIZE == 0);
@@ -332,7 +344,7 @@ namespace gpu_mpi {
         char* data = (char*) allocate_host_mem(buffer_size);
         ((int*)data)[0] = I_FWRITE;
         ((FILE**)data)[1] = fh->file;
-        ((void**)data)[2] = fh->buffer[block_index];
+        ((void**)data)[2] = fh->buffer[block_index].block;
         ((int*)data)[6] = seekpos;
         delegate_to_host((void*)data, buffer_size);
         // wait
@@ -344,31 +356,33 @@ namespace gpu_mpi {
     }
 
     __device__ void __write_block(MPI_File* fh, int block_index, int start, int count, const void* buf, int seekpos){
+        mutex_lock(&fh->buffer[block_index].lock);
         // TODO: check if block_index > num_blocks and whether need to allocate more buffer
 
         // for now only support read the whole block
         // check whether the whole block is in buffer
         if(fh->status[block_index] == BLOCK_NOT_IN){
             // data not in buffer, read to from cpu
-            fh->buffer[block_index] = allocate_host_mem(INIT_BUFFER_BLOCK_SIZE);
+            fh->buffer[block_index].block = allocate_host_mem(INIT_BUFFER_BLOCK_SIZE);
             __read_file(fh, block_index, seekpos);
             fh->status[block_index] = BLOCK_IN_CLEAN;
         }
 
         // write buffer
-        void* buffer_start = fh->buffer[block_index];
+        void* buffer_start = fh->buffer[block_index].block;
         buffer_start = (char*)buffer_start + start;
         memcpy(buffer_start, buf, count);
         fh->status[block_index] = BLOCK_IN_DIRTY;
+        mutex_unlock(&fh->buffer[block_index].lock);
         // printf("%s", "__write_block succeeds\n");
     }
 
-    __device__ unsigned int lock = 0;
+    // __device__ unsigned int lock = 0;
     __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
         // TODO: check amode
 
         // TODO: Only one thread can get access 
-        mutex_lock(&lock);
+        // mutex_lock(&lock);
 
         assert(datatype == MPI_CHAR);
         // write into buffer
@@ -384,6 +398,7 @@ namespace gpu_mpi {
         int remain_count = count;
         int seekpos = cur_pos;
 
+        // TODO: revice buffer structure, so that each block has a lock?
         // need to write partial of the first block
         if(block_offset != 0){
             __write_block(&fh, cur_block, block_offset, INIT_BUFFER_BLOCK_SIZE - block_offset, buf_start, seekpos);
@@ -410,7 +425,7 @@ namespace gpu_mpi {
         // assume we can always write count data
         fh.seek_pos[rank] += count;
 
-        mutex_unlock(&lock);
+        // mutex_unlock(&lock);
         // TODO: Make sure what return value should be
         return count;
     }
@@ -463,7 +478,7 @@ namespace gpu_mpi {
             // TODO: release buffer array
             for(int i = 0; i < num_blocks; i++){
                 if(fh->status[i] != BLOCK_NOT_IN)
-                    free_host_mem(fh->buffer[i]);
+                    free_host_mem(fh->buffer[i].block);
             }
             free(fh->buffer);
             // TODO: release status array
