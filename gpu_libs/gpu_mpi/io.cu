@@ -264,11 +264,10 @@ namespace gpu_mpi {
             __read_file(fh, block_index, seekpos);
             fh->status[block_index] = BLOCK_IN_CLEAN;
         }
-
         // data in buffer
         void* buffer_start = fh->buffer[block_index].block;
         buffer_start = (char*)buffer_start + start;
-        memcpy(buf, buffer_start, count);   
+        memcpy(buf, buffer_start, count); 
         // printf("%s", "__read_block succeed\n");     
     }
 
@@ -283,16 +282,35 @@ namespace gpu_mpi {
         int cur_pos = fh.seek_pos[rank];
         int cur_block = cur_pos / INIT_BUFFER_BLOCK_SIZE;
         int block_offset = cur_pos % INIT_BUFFER_BLOCK_SIZE;
-
+        int num_block = 1 + (count - (INIT_BUFFER_BLOCK_SIZE - block_offset)) / INIT_BUFFER_BLOCK_SIZE + 1;
         // TODO: make it support read part of the block
         // for now only support read the whole block
-        assert(block_offset == 0);
-        assert(count % INIT_BUFFER_BLOCK_SIZE == 0);
-        int num_block = count / INIT_BUFFER_BLOCK_SIZE;
-        for(int i=0;i<num_block;i++){
-            void* buf_start = ((char*)buf) + i * INIT_BUFFER_BLOCK_SIZE;
-            int seekpos = cur_pos + i * INIT_BUFFER_BLOCK_SIZE;
-            __read_block(&fh, cur_block + i, 0, INIT_BUFFER_BLOCK_SIZE, buf_start, seekpos);
+        // assert(block_offset == 0);
+        // assert(count % INIT_BUFFER_BLOCK_SIZE == 0);
+
+        // pointer to the buf we are writing into
+        void* buf_start = buf;
+        int remain_count = count;
+        int seekpos = cur_block * INIT_BUFFER_BLOCK_SIZE;
+
+        if(block_offset != 0){
+            __read_block(&fh, cur_block, block_offset, INIT_BUFFER_BLOCK_SIZE - block_offset, buf_start, seekpos);
+            buf_start = (char*)buf_start + INIT_BUFFER_BLOCK_SIZE - block_offset;
+            seekpos += INIT_BUFFER_BLOCK_SIZE;
+            cur_block += 1;
+            num_block -= 1;
+            remain_count -= (INIT_BUFFER_BLOCK_SIZE - block_offset);
+        }
+        for(int i = 0; i < num_block; i++){
+            size_t read_size = INIT_BUFFER_BLOCK_SIZE;
+            size_t read_buffer_offset = 0;
+            // need to write partial of the last block
+            if(i == num_block - 1){
+                read_size = remain_count - i * INIT_BUFFER_BLOCK_SIZE;
+            }
+            __read_block(&fh, cur_block + i, read_buffer_offset, read_size, buf_start, seekpos);
+            buf_start = (char*)buf_start + INIT_BUFFER_BLOCK_SIZE;
+            seekpos += INIT_BUFFER_BLOCK_SIZE;
         }
 
         // assume we always can read count data
