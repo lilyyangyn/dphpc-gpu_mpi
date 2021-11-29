@@ -10,7 +10,7 @@ struct FileRead {
 
         MPI_Info info;
         MPI_File fh;
-        MPI_File_open(MPI_COMM_WORLD, "1.txt", MPI_MODE_RDWR | MPI_MODE_CREATE, info, &fh);
+        MPI_File_open(MPI_COMM_WORLD, "1.txt", MPI_MODE_RDONLY, info, &fh);
 
         char buf;
         MPI_Status status;
@@ -54,4 +54,29 @@ struct FileReadAmodeIncorrect {
 TEST_CASE("FileReadAmodeIncorrect", "[FileReadAmodeIncorrect]") {
     TestRunner testRunner(1);
     testRunner.run<FileReadAmodeIncorrect>();
+}
+
+
+struct FileReadAnyPlaceAnyLen {
+    static __device__ void run(bool& ok) {
+        MPI_Init(nullptr, nullptr);
+
+        MPI_Info info;
+        MPI_File fh;
+        MPI_File_open(MPI_COMM_WORLD, "testfile.txt", MPI_MODE_RDONLY, info, &fh);
+
+        char read_buf[81];
+        MPI_File_seek(fh, 0, MPI_SEEK_SET);
+        int count = MPI_File_read(fh, read_buf, 64, MPI_CHAR, NULL);
+        read_buf[80] = '\0';
+        printf("we read %d, content is %s\n", count, read_buf);
+        ok = count == 64;
+
+        MPI_Finalize();
+    }
+};
+
+TEST_CASE("FileReadAnyPlaceAnyLen", "[FileReadAnyPlaceAnyLen]") {
+    TestRunner testRunner(1);
+    testRunner.run<FileReadAnyPlaceAnyLen>();
 }

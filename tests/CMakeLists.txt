@@ -42,3 +42,7 @@ add_test(test_io_file_access test_io_file_access)
 add_executable(test_io_file_open test_io_file_open.cu)
 target_link_libraries(test_io_file_open gpu_libc gpu_mpi libc_processor)
 add_test(test_io_file_open test_io_file_open)
+
+add_executable(test_io_file_write test_io_file_write.cu)
+target_link_libraries(test_io_file_write gpu_libc gpu_mpi libc_processor)
+add_test(test_io_file_write test_io_file_write)
