@@ -282,11 +282,24 @@ namespace gpu_mpi {
         int cur_pos = fh.seek_pos[rank];
         int cur_block = cur_pos / INIT_BUFFER_BLOCK_SIZE;
         int block_offset = cur_pos % INIT_BUFFER_BLOCK_SIZE;
-        int num_block = 1 + (count - (INIT_BUFFER_BLOCK_SIZE - block_offset)) / INIT_BUFFER_BLOCK_SIZE + 1;
-        // TODO: make it support read part of the block
-        // for now only support read the whole block
-        // assert(block_offset == 0);
-        // assert(count % INIT_BUFFER_BLOCK_SIZE == 0);
+        int num_block;
+        if(block_offset == 0){
+            if(count % INIT_BUFFER_BLOCK_SIZE == 0){
+                num_block = count / INIT_BUFFER_BLOCK_SIZE;
+            }
+            else{
+                num_block = count / INIT_BUFFER_BLOCK_SIZE + 1;
+            }
+        }
+        else{
+            int remain = count - (INIT_BUFFER_BLOCK_SIZE - block_offset);
+            if(remain % INIT_BUFFER_BLOCK_SIZE == 0){
+                num_block = 1 + remain / INIT_BUFFER_BLOCK_SIZE;
+            }
+            else{
+                num_block = 1 + remain / INIT_BUFFER_BLOCK_SIZE + 1;
+            }
+        }
 
         // pointer to the buf we are writing into
         void* buf_start = buf;
@@ -393,12 +406,12 @@ namespace gpu_mpi {
     __device__ void __write_block(MPI_File* fh, int block_index, int start, int count, const void* buf, int seekpos){
         mutex_lock(&fh->buffer[block_index].lock);
         // TODO: check if block_index > num_blocks and whether need to allocate more buffer
-
         // for now only support read the whole block
         // check whether the whole block is in buffer
         if(fh->status[block_index] == BLOCK_NOT_IN){
             // data not in buffer, read to from cpu
             fh->buffer[block_index].block = allocate_host_mem(INIT_BUFFER_BLOCK_SIZE);
+            memset(fh->buffer[block_index].block, 0, INIT_BUFFER_BLOCK_SIZE);
             __read_file(fh, block_index, seekpos);
             fh->status[block_index] = BLOCK_IN_CLEAN;
         }
@@ -416,9 +429,6 @@ namespace gpu_mpi {
     __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
         // TODO: check amode
 
-        // TODO: Only one thread can get access 
-        // mutex_lock(&lock);
-
         assert(datatype == MPI_CHAR);
         // write into buffer
         int rank;
@@ -426,20 +436,35 @@ namespace gpu_mpi {
         int cur_pos = fh.seek_pos[rank];
         int cur_block = cur_pos / INIT_BUFFER_BLOCK_SIZE;
         int block_offset = cur_pos % INIT_BUFFER_BLOCK_SIZE;
-        int num_block = 1 + (count - (INIT_BUFFER_BLOCK_SIZE - block_offset)) / INIT_BUFFER_BLOCK_SIZE;
-
+        int num_block;
+        if(block_offset == 0){
+            if(count % INIT_BUFFER_BLOCK_SIZE == 0){
+                num_block = count / INIT_BUFFER_BLOCK_SIZE;
+            }
+            else{
+                num_block = count / INIT_BUFFER_BLOCK_SIZE + 1;
+            }
+        }
+        else{
+            int remain = count - (INIT_BUFFER_BLOCK_SIZE - block_offset);
+            if(remain % INIT_BUFFER_BLOCK_SIZE == 0){
+                num_block = 1 + remain / INIT_BUFFER_BLOCK_SIZE;
+            }
+            else{
+                num_block = 1 + remain / INIT_BUFFER_BLOCK_SIZE + 1;
+            }
+        }
         // pointer to the buf we are reading from
         const void* buf_start = buf;
         int remain_count = count;
-        int seekpos = cur_pos;
+        int seekpos = cur_block * INIT_BUFFER_BLOCK_SIZE;
 
         // TODO: revice buffer structure, so that each block has a lock?
         // need to write partial of the first block
         if(block_offset != 0){
             __write_block(&fh, cur_block, block_offset, INIT_BUFFER_BLOCK_SIZE - block_offset, buf_start, seekpos);
-            // check if this += is correct!!!!!!!!!!!!!!!!!!!!!!!!!
             buf_start = (const char*)buf_start + INIT_BUFFER_BLOCK_SIZE - block_offset;
-            seekpos += INIT_BUFFER_BLOCK_SIZE - block_offset;
+            seekpos += INIT_BUFFER_BLOCK_SIZE;
             cur_block += 1;
             num_block -= 1;
             remain_count -= INIT_BUFFER_BLOCK_SIZE - block_offset;
@@ -460,8 +485,6 @@ namespace gpu_mpi {
         // assume we can always write count data
         fh.seek_pos[rank] += count;
 
-        // mutex_unlock(&lock);
-        // TODO: Make sure what return value should be
         return count;
     }
     
@@ -559,6 +582,7 @@ namespace gpu_mpi {
             return err = MPI_ERR_NO_SUCH_FILE;
         }
         ret = __delete_file(filename);
+        assert(ret == 0);
         // MPI_Barrier(MPI_COMM_WORLD);
         return err;
     }
