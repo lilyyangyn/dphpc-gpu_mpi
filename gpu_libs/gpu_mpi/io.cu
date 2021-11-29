@@ -364,7 +364,7 @@ namespace gpu_mpi {
         memcpy(buffer_start, buf, count);
         
         mutex_lock(&fh->buffer[block_index].lock);
-        if(fh->status[block_index] == BLOCK_NOT_IN){
+        if(fh->status[block_index] != BLOCK_NOT_IN){
             free_host_mem(fh->buffer[block_index].block);
         }
         fh->buffer[block_index].block = buffer_start;
