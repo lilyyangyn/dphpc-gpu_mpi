@@ -52,7 +52,7 @@ void process_gpu_libc(void* mem, size_t size) {
         if(mode_flag == I_FOPEN_MODE_RD){
             mode = "r";
         }else if (mode_flag == I_FOPEN_MODE_RW) {
-            mode = "w+";
+            mode = "r+";
         }else if (mode_flag == I_FOPEN_MODE_WD) {
             mode = "w";
         }else if (mode_flag == I_FOPEN_MODE_RW_APPEND) {
@@ -72,7 +72,6 @@ void process_gpu_libc(void* mem, size_t size) {
         int ret = fseek(file, seekpos, SEEK_SET);
         assert(ret == 0);
         size_t cnt = fread(buf, 1, INIT_BUFFER_BLOCK_SIZE, file);
-        // printf("we read %ld bytes: \n", cnt);
         //assert(cnt == INIT_BUFFER_BLOCK_SIZE);
         ((size_t*)mem)[1] = cnt;
         set_i_ready_flag(mem);
