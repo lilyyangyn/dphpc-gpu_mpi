@@ -355,6 +355,23 @@ namespace gpu_mpi {
         // return cnt;
     }
 
+    __device__ void __write_block_Faster(MPI_File* fh, int block_index, int start, int count, const void* buf, int seekpos){
+        // MUST WRITE THE WHOLE BUFFER
+        assert(count == INIT_BUFFER_BLOCK_SIZE);
+        assert(start == 0);
+
+        void* buffer_start = allocate_host_mem(INIT_BUFFER_BLOCK_SIZE);
+        memcpy(buffer_start, buf, count);
+        
+        mutex_lock(&fh->buffer[block_index].lock);
+        if(fh->status[block_index] == BLOCK_NOT_IN){
+            free_host_mem(fh->buffer[block_index].block);
+        }
+        fh->buffer[block_index].block = buffer_start;
+        fh->status[block_index] = BLOCK_IN_DIRTY;
+        mutex_unlock(&fh->buffer[block_index].lock);
+    }    
+
     __device__ void __write_block(MPI_File* fh, int block_index, int start, int count, const void* buf, int seekpos){
         mutex_lock(&fh->buffer[block_index].lock);
         // TODO: check if block_index > num_blocks and whether need to allocate more buffer
