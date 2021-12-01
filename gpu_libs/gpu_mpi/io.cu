@@ -310,7 +310,8 @@ namespace gpu_mpi {
         int seekpos = cur_block * INIT_BUFFER_BLOCK_SIZE;
 
         if(block_offset != 0){
-            __read_block(&fh, cur_block, block_offset, INIT_BUFFER_BLOCK_SIZE - block_offset, buf_start, seekpos);
+            int read_size = (count >= (INIT_BUFFER_BLOCK_SIZE - block_offset))?(INIT_BUFFER_BLOCK_SIZE - block_offset):count;
+            __read_block(&fh, cur_block, block_offset, read_size, buf_start, seekpos);
             buf_start = (char*)buf_start + INIT_BUFFER_BLOCK_SIZE - block_offset;
             seekpos += INIT_BUFFER_BLOCK_SIZE;
             cur_block += 1;
@@ -422,6 +423,7 @@ namespace gpu_mpi {
         // write buffer
         void* buffer_start = fh->buffer[block_index].block;
         buffer_start = (char*)buffer_start + start;
+        // printf("buffer_start %p, buf %p, count %d\n", buffer_start, buf, count);
         memcpy(buffer_start, buf, count);
         fh->status[block_index] = BLOCK_IN_DIRTY;
         mutex_unlock(&fh->buffer[block_index].lock);
@@ -468,7 +470,8 @@ namespace gpu_mpi {
         // TODO: revice buffer structure, so that each block has a lock?
         // need to write partial of the first block
         if(block_offset != 0){
-            __write_block(&fh, cur_block, block_offset, INIT_BUFFER_BLOCK_SIZE - block_offset, buf_start, seekpos);
+            int write_size = (count >= (INIT_BUFFER_BLOCK_SIZE - block_offset))?(INIT_BUFFER_BLOCK_SIZE - block_offset):count;
+            __write_block(&fh, cur_block, block_offset, write_size, buf_start, seekpos);
             buf_start = (const char*)buf_start + INIT_BUFFER_BLOCK_SIZE - block_offset;
             seekpos += INIT_BUFFER_BLOCK_SIZE;
             cur_block += 1;
@@ -478,8 +481,8 @@ namespace gpu_mpi {
         // printf("rank is %d, offset is %d, cur_block is %d, num_block is %d\n", rank, block_offset, cur_block, num_block);
         // Is it alright to mix size and count here? what if the MPI_Datatype is double, whose size is not 1 as char?
         for(int i = 0; i < num_block; i++){
-            size_t write_size = INIT_BUFFER_BLOCK_SIZE;
-            size_t write_buffer_offset = 0;
+            int write_size = (int)INIT_BUFFER_BLOCK_SIZE;
+            int write_buffer_offset = 0;
             // need to write partial of the last block
             if(i == num_block - 1){
                 write_size = remain_count - i * INIT_BUFFER_BLOCK_SIZE;
