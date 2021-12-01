@@ -293,7 +293,10 @@ namespace gpu_mpi {
         }
         else{
             int remain = count - (INIT_BUFFER_BLOCK_SIZE - block_offset);
-            if(remain % INIT_BUFFER_BLOCK_SIZE == 0){
+            if(remain < 0){
+                num_block = 1;
+            }
+            else if(remain % INIT_BUFFER_BLOCK_SIZE == 0){
                 num_block = 1 + remain / INIT_BUFFER_BLOCK_SIZE;
             }
             else{
@@ -428,7 +431,6 @@ namespace gpu_mpi {
     // __device__ unsigned int lock = 0;
     __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
         // TODO: check amode
-
         assert(datatype == MPI_CHAR);
         // write into buffer
         int rank;
@@ -447,13 +449,17 @@ namespace gpu_mpi {
         }
         else{
             int remain = count - (INIT_BUFFER_BLOCK_SIZE - block_offset);
-            if(remain % INIT_BUFFER_BLOCK_SIZE == 0){
+            if(remain < 0){
+                num_block = 1;
+            }
+            else if(remain % INIT_BUFFER_BLOCK_SIZE == 0){
                 num_block = 1 + remain / INIT_BUFFER_BLOCK_SIZE;
             }
             else{
                 num_block = 1 + remain / INIT_BUFFER_BLOCK_SIZE + 1;
             }
         }
+        // printf("rank is %d, cur_block is %d, num_block is %d\n", rank, cur_block, num_block);
         // pointer to the buf we are reading from
         const void* buf_start = buf;
         int remain_count = count;
@@ -468,7 +474,8 @@ namespace gpu_mpi {
             cur_block += 1;
             num_block -= 1;
             remain_count -= INIT_BUFFER_BLOCK_SIZE - block_offset;
-        }   
+        }
+        // printf("rank is %d, offset is %d, cur_block is %d, num_block is %d\n", rank, block_offset, cur_block, num_block);
         // Is it alright to mix size and count here? what if the MPI_Datatype is double, whose size is not 1 as char?
         for(int i = 0; i < num_block; i++){
             size_t write_size = INIT_BUFFER_BLOCK_SIZE;
@@ -481,7 +488,6 @@ namespace gpu_mpi {
             buf_start = (const char*)buf_start + INIT_BUFFER_BLOCK_SIZE;
             seekpos += INIT_BUFFER_BLOCK_SIZE;
         }
-
         // assume we can always write count data
         fh.seek_pos[rank] += count;
 
