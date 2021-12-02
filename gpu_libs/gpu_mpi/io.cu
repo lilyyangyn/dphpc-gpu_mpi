@@ -132,6 +132,29 @@ __device__ int __delete_file(const char* filename){
     return res;
 }
 
+__device__ int __view_pos_to_file_pos(MPI_File_View view, int position){
+    int adjusted_pos = position - view.disp;
+    if(adjusted_pos < 0) return -1;
+    int typemap_offset_idx = adjusted_pos % view.filetype.typemap_len;
+    int typemap_idx = adjusted_pos / view.filetype.typemap_len;
+    return view.disp + typemap_idx * view.filetype.size() + view.filetype.typemap[typemap_offset_idx].disp;
+}
+
+__device__ int __file_pos_to_view_pos(MPI_File_View view, int position){
+    int adjusted_pos = position - view.disp;
+    if(adjusted_pos < 0) return -1;
+    int typemap_offset = adjusted_pos % view.filetype.size();
+    int typemap_idx = adjusted_pos / view.filetype.size();
+    int typemap_offset_idx = 0;
+    while(typemap_offset_idx < view.filetype.typemap_len){
+        if(typemap_offset == view.filetype.typemap[typemap_offset_idx].disp){
+            break;
+        }
+        typemap_offset_idx++;
+    }
+    if(typemap_offset_idx == view.filetype.typemap_len) return -1;
+    return view.disp + typemap_idx * view.filetype.typemap_len + typemap_offset_idx;
+}
 
 /* ------FILE MANIPULATION------ */
 
@@ -342,30 +365,21 @@ __device__ int MPI_File_seek(MPI_File fh, MPI_Offset offset, int whence){
 
     int rank;
     MPI_Comm_rank(fh.comm, &rank);
+    int new_offset = -1;
     if(whence == MPI_SEEK_SET){
-        if(offset < 0){
-            // see documentation p521 line 11
-            return MPI_ERR_UNSUPPORTED_OPERATION;
-        }
-        // the offset is corresponding to the thread's view
-        // fh.seek_pos[rank] = offset;
-        fh.seek_pos[rank] = fh.views[rank].disp + offset;
+        new_offset = __view_pos_to_file_pos(fh.views[rank], offset);       
     }else if(whence == MPI_SEEK_CUR){
-        int new_offset = fh.seek_pos[rank] + offset;
-        if(new_offset < 0){
-            // see documentation p521 line 11
-            return MPI_ERR_UNSUPPORTED_OPERATION;
-        }
-        fh.seek_pos[rank] = new_offset;
+        new_offset = __view_pos_to_file_pos(fh.views[rank], fh.seek_pos[rank] + offset);
     }else if(whence == MPI_SEEK_END){
         int sz = __get_file_size(fh.file);
-        int new_offset = sz + offset;
-        if(new_offset < 0){
-            // see documentation p521 line 11
-            return MPI_ERR_UNSUPPORTED_OPERATION;
-        }
-        fh.seek_pos[rank] = new_offset;
+        new_offset = __view_pos_to_file_pos(fh.views[rank], sz + offset);
     }
+
+    if(new_offset < 0){
+        // see documentation p521 line 11
+        return MPI_ERR_UNSUPPORTED_OPERATION;
+    }
+    fh.seek_pos[rank] = new_offset;
 
     return MPI_SUCCESS;
 }
@@ -373,8 +387,12 @@ __device__ int MPI_File_seek(MPI_File fh, MPI_Offset offset, int whence){
 __device__ int MPI_File_get_position(MPI_File fh, MPI_Offset *offset){
     int rank;
     MPI_Comm_rank(fh.comm, &rank);
-    *offset = fh.seek_pos[rank];
-    return 0;
+    int file_offset = __file_pos_to_view_pos(fh.views[rank], fh.seek_pos[rank]);
+    if(file_offset < 0){
+        return MPI_ERR_UNSUPPORTED_OPERATION;
+    }
+    *offset = file_offset;
+    return MPI_SUCCESS;
 }
 
 __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
@@ -404,7 +422,9 @@ __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype dat
     // *((int*)data) = I_FREAD;
     
     // If seek_pos smaller than the start of the valid area of the thread's view, then seek to the beginning
-    fh.seek_pos[rank] = fh.seek_pos[rank] < fh.views[rank].disp ? fh.views[rank].disp : fh.seek_pos[rank];
+    if(fh.seek_pos[rank] < fh.views[rank].disp) {
+        MPI_File_seek(fh, fh.views[rank].disp, MPI_SEEK_SET);
+    }
     // __rw_params r_params(I_READY,fh.file,datatype,data + sizeof(__rw_params),count,fh.seek_pos[rank]);
     __rw_params r_params(I_READY,fh.file,gpu_mpi::plainTypeSize(datatype),data + sizeof(__rw_params),count,fh.seek_pos[rank]);
     *((__rw_params*)data) = r_params;
@@ -417,8 +437,8 @@ __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype dat
 
     memcpy(buf, r_params.buf, gpu_mpi::plainTypeSize(datatype) * count);  // sizeof(datatype) * count);
     size_t ret = ((size_t*)data)[1];
-    // if (fh.seek_pos != nullptr) *(fh.seek_pos) += ret;  // TODO fh.seek_pos shouldn't be nullptr. Why it is?
-    fh.seek_pos[rank]+=ret;
+    // fh.seek_pos[rank]+=ret;
+    MPI_File_seek(fh, ret, MPI_SEEK_CUR);
     free_host_mem(data);
     return ret;
 }
@@ -437,7 +457,9 @@ __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datat
     char* data = (char*) allocate_host_mem(buffer_size);
     //assemble metadata TODO: why we need to re-seek every time? is there redundant seek?
     // If seek_pos smaller than the start of the valid area of the thread's view, then seek to the beginning
-    fh.seek_pos[rank] = fh.seek_pos[rank] < fh.views[rank].disp ? fh.views[rank].disp : fh.seek_pos[rank];
+    if(fh.seek_pos[rank] < fh.views[rank].disp) {
+        MPI_File_seek(fh, fh.views[rank].disp, MPI_SEEK_SET);
+    }
     // __rw_params w_params(I_FWRITE,fh.file,datatype,data + sizeof(__rw_params),count,fh.seek_pos[rank]);
     __rw_params w_params(I_FWRITE,fh.file,gpu_mpi::plainTypeSize(datatype),data + sizeof(__rw_params),count,fh.seek_pos[rank]);
     //embed metadata
@@ -452,7 +474,8 @@ __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datat
     while(((int*)data)[0] != I_READY){};
     int return_value = (int) *((size_t*)(data+8));
     //TODO: assuming individual file pointer, but how does shared pointer differ from this?
-    fh.seek_pos[rank]+=return_value;
+    // fh.seek_pos[rank]+=return_value;
+    MPI_File_seek(fh, return_value, MPI_SEEK_CUR);
     free_host_mem(data);
     //TODO: step 4 error catching
     //#memory cosistency: assuming that write is not reordered with write
