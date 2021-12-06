@@ -543,18 +543,15 @@ __host__ __device__ void* FreeManagedMemory::allocate(size_t size) {
                 return (void*) &buffer[blockDataStart];
             } else {
                 // normal allocation, split buffer into two parts: first is allocated, the second is free
-                size_t newBlockEnd = blockDataStart + size;
+                size_t newBlockEnd = memBlock->end;
+                memBlock->end -= size + sizeof(BlockDescriptor);
 
-                // second free block
-                BlockDescriptor* newFreeBlock = (BlockDescriptor*)(&buffer[newBlockEnd]);
-                newFreeBlock->status = FREE;
-                newFreeBlock->end = memBlock->end;
+                // second used block
+                BlockDescriptor* newFreeBlock = (BlockDescriptor*)(&buffer[memBlock->end]);
+                newFreeBlock->status = USED;
+                newFreeBlock->end = newBlockEnd;
 
-                // first used block
-                memBlock->status = USED;
-                memBlock->end = newBlockEnd;
-
-                return (void*) &buffer[blockDataStart];
+                return (void*) &buffer[memBlock->end + sizeof(BlockDescriptor)];
             }
         }
 
