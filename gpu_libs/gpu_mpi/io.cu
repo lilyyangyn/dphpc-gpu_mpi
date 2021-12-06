@@ -487,7 +487,7 @@ namespace gpu_mpi {
                 write_size = remain_count - i * INIT_BUFFER_BLOCK_SIZE;
             }
             if(write_size == INIT_BUFFER_BLOCK_SIZE){
-                __write_block(&fh, cur_block + i, write_buffer_offset, write_size, buf_start, seekpos);
+                __write_block_Faster(&fh, cur_block + i, write_buffer_offset, write_size, buf_start, seekpos);
             }
             else{
                 __write_block(&fh, cur_block + i, write_buffer_offset, write_size, buf_start, seekpos);
