@@ -75,8 +75,8 @@
 #define BLOCK_IN_CLEAN     1
 #define BLOCK_IN_DIRTY     2
 
-#define INIT_BUFFER_BLOCK_NUM   10
-#define INIT_BUFFER_BLOCK_SIZE  64
+#define INIT_BUFFER_BLOCK_NUM   2500
+#define INIT_BUFFER_BLOCK_SIZE 2048
 
 
 struct MPI_Status;
