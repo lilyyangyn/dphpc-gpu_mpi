@@ -534,9 +534,9 @@ __host__ __device__ void* FreeManagedMemory::allocate(size_t size) {
         compactionWithNextBlocks(blockStart);
         size_t blockUsefulSize = memBlock->end - blockStart;
 
-        if (memBlock->status == FREE && blockUsefulSize >= size) {
+        if (memBlock->status == FREE && blockUsefulSize >= (size + sizeof(BlockDescriptor))) {
             // allocate block
-            size_t blockSizeLeft = blockUsefulSize - size;
+            size_t blockSizeLeft = blockUsefulSize - size - sizeof(BlockDescriptor);
             if (blockSizeLeft <= sizeof(BlockDescriptor)) {
                 // utilize all memory since it will not be possibe to use it anyway
                 memBlock->status = USED;
