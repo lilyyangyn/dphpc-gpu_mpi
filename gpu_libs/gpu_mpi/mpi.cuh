@@ -15,6 +15,7 @@
 #include "datatypes.cuh"
 #include "operators.cuh"
 #include "io.cuh"
+#include <cassert>
 
 struct MPI_Status {
     int MPI_SOURCE = MPI_ANY_SOURCE;
@@ -50,9 +51,9 @@ __device__ double MPI_Wtime(void);
 __device__ int MPI_Reduce(const void *sendbuf, void *recvbuf, int count,
                       MPI_Datatype datatype, MPI_Op op, int root, MPI_Comm comm);
 
-__device__ int MPI_Type_contiguous(int count, MPI_Datatype_Ext oldtype, MPI_Datatype_Ext *newtype);
-__device__ int MPI_Type_vector(int count, int blocklength, int stride, MPI_Datatype_Ext oldtype, MPI_Datatype_Ext *newtype);
-__device__ int MPI_Type_commit(MPI_Datatype_Ext *datatype);
+__device__ int MPI_Type_contiguous(int count, MPI_Datatype oldtype, MPI_Datatype *newtype);
+__device__ int MPI_Type_vector(int count, int blocklength, int stride, MPI_Datatype oldtype, MPI_Datatype *newtype);
+__device__ int MPI_Type_commit(MPI_Datatype *datatype);
 __device__ int MPI_Recv(void *buf, int count, MPI_Datatype datatype,
             int source, int tag, MPI_Comm comm, MPI_Status *status);
 __device__ int MPI_Sendrecv(const void *sendbuf, int sendcount, MPI_Datatype sendtype,

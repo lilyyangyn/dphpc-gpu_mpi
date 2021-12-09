@@ -320,7 +320,7 @@ __device__ int MPI_File_close(MPI_File *fh){
 
 /* ------FILE VIEWS------ */
 
-__device__ int MPI_File_set_view(MPI_File fh, MPI_Offset disp, MPI_Datatype_Ext etype, MPI_Datatype_Ext filetype, const char *datarep, MPI_Info info){
+__device__ int MPI_File_set_view(MPI_File fh, MPI_Offset disp, MPI_Datatype etype, MPI_Datatype filetype, const char *datarep, MPI_Info info){
     // now only support single type repitition
     // assert(etype == filetype);
 
@@ -338,7 +338,7 @@ __device__ int MPI_File_set_view(MPI_File fh, MPI_Offset disp, MPI_Datatype_Ext 
     return MPI_SUCCESS;
 }
 
-__device__ int MPI_File_get_view(MPI_File fh, MPI_Offset *disp, MPI_Datatype_Ext *etype, MPI_Datatype_Ext *filetype, char *datarep){
+__device__ int MPI_File_get_view(MPI_File fh, MPI_Offset *disp, MPI_Datatype *etype, MPI_Datatype *filetype, char *datarep){
     int rank;
     MPI_Comm_rank(fh.comm, &rank);
 
