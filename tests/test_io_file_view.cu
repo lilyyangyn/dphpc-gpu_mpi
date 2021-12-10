@@ -73,10 +73,10 @@ struct FileViewSetter {
     }
 };
 
-TEST_CASE("FileViewSetter", "[FileViewSetter]") {
-    TestRunner testRunner(1);
-    testRunner.run<FileViewSetter>();
-}
+// TEST_CASE("FileViewSetter", "[FileViewSetter]") {
+//     TestRunner testRunner(1);
+//     testRunner.run<FileViewSetter>();
+// }
 
 struct FileViewRWSimple {
     static __device__ void run(bool& ok) {
@@ -131,10 +131,10 @@ struct FileViewRWSimple {
     }
 };
 
-TEST_CASE("FileViewRWSimple", "[FileViewRWSimple]") {
-    TestRunner testRunner(2);
-    testRunner.run<FileViewRWSimple>();
-}
+// TEST_CASE("FileViewRWSimple", "[FileViewRWSimple]") {
+//     TestRunner testRunner(2);
+//     testRunner.run<FileViewRWSimple>();
+// }
 
 struct FileViewRWContiguous {
     static __device__ void run(bool& ok) {
@@ -161,17 +161,24 @@ struct FileViewRWContiguous {
         for (int i=0;i<N;i++){
             wbuf[i]=('0' + rank);
         }
-        printf("filetype size: %d\n", arraytype.size());
         
-        MPI_File_open(MPI_COMM_WORLD, "viewwrite.txt", MPI_MODE_RDWR | MPI_MODE_CREATE, info, &fh);
+        MPI_File_open(MPI_COMM_WORLD, "viewcontigious.txt", MPI_MODE_RDWR | MPI_MODE_CREATE, info, &fh);
         MPI_File_set_view(fh, disp, etype, arraytype, datarep, info);
 
         MPI_File_write(fh, wbuf, N, my_etype, nullptr);
+        MPI_Barrier(MPI_COMM_WORLD);
         MPI_File_read(fh, rbuf, N, my_etype, nullptr);
 
         MPI_File_close(&fh);
 
-        ok = *wbuf==*rbuf;
+        // ok = *wbuf==*rbuf;
+        for (int i=0;i<N;i++){
+            printf("rank: %d, w: %c, r: %c\n", rank, wbuf[i], rbuf[i]);
+            ok = wbuf[i]==rbuf[i];
+            if (ok == false){
+                break;
+            }
+        }
 
         free(wbuf);
         free(rbuf);
@@ -180,10 +187,10 @@ struct FileViewRWContiguous {
     }
 };
 
-TEST_CASE("FileViewRWContiguous", "[FileViewRWContiguous]") {
-    TestRunner testRunner(2);
-    testRunner.run<FileViewRWContiguous>();
-}
+// TEST_CASE("FileViewRWContiguous", "[FileViewRWContiguous]") {
+//     TestRunner testRunner(2);
+//     testRunner.run<FileViewRWContiguous>();
+// }
 
 struct FileViewRWVector {
     static __device__ void run(bool& ok) {
@@ -213,17 +220,27 @@ struct FileViewRWVector {
         for (int i=0;i<2*NW;i++){
             wbuf[i]=('0' + rank);
         }
-        printf("filetype size: %d\n", arraytype.size());
+        // printf("filetype size: %d\n", arraytype.size());
         
-        MPI_File_open(MPI_COMM_WORLD, "viewwrite.txt", MPI_MODE_RDWR | MPI_MODE_CREATE, info, &fh);
+        MPI_File_open(MPI_COMM_WORLD, "viewvector.txt", MPI_MODE_RDWR | MPI_MODE_CREATE, info, &fh);
         MPI_File_set_view(fh, disp, etype, arraytype, datarep, info);
 
         MPI_File_write(fh, wbuf, NW*2, my_etype, nullptr);
+
+        MPI_Barrier(MPI_COMM_WORLD);
+
         MPI_File_read(fh, rbuf, NW*2, my_etype, nullptr);
 
         MPI_File_close(&fh);
 
-        ok = *wbuf==*rbuf;
+        // ok = *wbuf==*rbuf;
+        for (int i=0;i<2*NW;i++){
+            printf("rank: %d, i: %d, w: %c, r: %c\n", rank, i, wbuf[i], rbuf[i]);
+            ok = wbuf[i]==rbuf[i];
+            if (ok == false){
+                break;
+            }
+        }
 
         free(wbuf);
         free(rbuf);
@@ -232,7 +249,7 @@ struct FileViewRWVector {
     }
 };
 
-// TEST_CASE("FileViewRWVector", "[FileViewRWVector]") {
-//     TestRunner testRunner(2);
-//     testRunner.run<FileViewRWVector>();
-// }
+TEST_CASE("FileViewRWVector", "[FileViewRWVector]") {
+    TestRunner testRunner(2);
+    testRunner.run<FileViewRWVector>();
+}
