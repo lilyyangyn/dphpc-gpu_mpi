@@ -133,10 +133,8 @@ __device__ int __delete_file(const char* filename){
 }
 
 __device__ int __view_pos_to_file_pos(MPI_File_View view, int position){
-    int adjusted_pos = position - view.disp;
-    if(adjusted_pos < 0) return -1;
-    int typemap_offset_idx = adjusted_pos % view.filetype.typemap_len;
-    int typemap_idx = adjusted_pos / view.filetype.typemap_len;
+    int typemap_offset_idx = position % view.filetype.typemap_len;
+    int typemap_idx = position / view.filetype.typemap_len;
     return view.disp + typemap_idx * view.filetype.size() + view.filetype.typemap[typemap_offset_idx].disp;
 }
 
@@ -153,7 +151,7 @@ __device__ int __file_pos_to_view_pos(MPI_File_View view, int position){
         typemap_offset_idx++;
     }
     if(typemap_offset_idx == view.filetype.typemap_len) return -1;
-    return view.disp + typemap_idx * view.filetype.typemap_len + typemap_offset_idx;
+    return typemap_idx * view.filetype.typemap_len + typemap_offset_idx;
 }
 
 /* ------FILE MANIPULATION------ */
@@ -324,6 +322,10 @@ __device__ int MPI_File_set_view(MPI_File fh, MPI_Offset disp, MPI_Datatype etyp
     // now only support single type repitition
     // assert(etype == filetype);
 
+    for(int i = 0; i < filetype.typemap_len; i++){
+        assert(etype == filetype.typemap[i].basic_type);
+    }
+
     int rank;
     MPI_Comm_rank(fh.comm, &rank);
     if((fh.amode & MPI_MODE_SEQUENTIAL) && disp == MPI_DISPLACEMENT_CURRENT){
@@ -426,8 +428,18 @@ __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype dat
         MPI_File_seek(fh, fh.views[rank].disp, MPI_SEEK_SET);
     }
     // __rw_params r_params(I_READY,fh.file,datatype,data + sizeof(__rw_params),count,fh.seek_pos[rank]);
-    __rw_params r_params(I_READY,fh.file,gpu_mpi::plainTypeSize(datatype),data + sizeof(__rw_params),count,fh.seek_pos[rank]);
+    // int layout_size = fh.views[rank].layout_len * sizeof(layout_segment);
+    int layout_size = fh.views[rank].layout_len * sizeof(layout_segment);
+    __rw_params r_params(I_FREAD,fh.file,
+                        datatype.size(),
+                        data + sizeof(__rw_params) + layout_size,
+                        count,
+                        fh.seek_pos[rank],
+                        fh.views[rank].layout_len,
+                        (layout_segment*)data + sizeof(__rw_params));
     *((__rw_params*)data) = r_params;
+    memcpy(r_params.layout, fh.views[rank].layout, layout_size);
+    printf("READ POS: %d, rank %d\n", r_params.seek_pos, rank);
     
     delegate_to_host(data, buffer_size);
     while (*((int*)data) != I_READY)
@@ -435,7 +447,7 @@ __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype dat
         // blocking wait (p506 l44)
     }
 
-    memcpy(buf, r_params.buf, gpu_mpi::plainTypeSize(datatype) * count);  // sizeof(datatype) * count);
+    memcpy(buf, r_params.buf, datatype.size() * count);
     size_t ret = ((size_t*)data)[1];
     // fh.seek_pos[rank]+=ret;
     MPI_File_seek(fh, ret, MPI_SEEK_CUR);
@@ -452,7 +464,7 @@ __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datat
     // int MPI_Type_size(MPI_Datatype datatype, int *size)
     //TODO: MPI_Type_size not implemented
     // assert(datatype==MPI_CHAR);
-    assert(buffer_size > sizeof(int*)*2+sizeof(FILE**)+gpu_mpi::plainTypeSize(datatype)*count);
+    assert(buffer_size > sizeof(int*)*2+sizeof(FILE**)+datatype.size()*count);
     //init
     char* data = (char*) allocate_host_mem(buffer_size);
     //assemble metadata TODO: why we need to re-seek every time? is there redundant seek?
@@ -461,12 +473,21 @@ __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datat
         MPI_File_seek(fh, fh.views[rank].disp, MPI_SEEK_SET);
     }
     // __rw_params w_params(I_FWRITE,fh.file,datatype,data + sizeof(__rw_params),count,fh.seek_pos[rank]);
-    __rw_params w_params(I_FWRITE,fh.file,gpu_mpi::plainTypeSize(datatype),data + sizeof(__rw_params),count,fh.seek_pos[rank]);
+    int layout_size = fh.views[rank].layout_len * sizeof(layout_segment);
+    __rw_params w_params(I_FWRITE,fh.file,
+                        datatype.size(),
+                        data + sizeof(__rw_params) + layout_size,
+                        count,
+                        fh.seek_pos[rank],
+                        fh.views[rank].layout_len,
+                        (layout_segment*)data + sizeof(__rw_params));
     //embed metadata
     *((__rw_params*)data) = w_params;
     // memcpy(data, (void*)&w_params, sizeof(__rw_params));
     //embed data
-    memcpy(data+sizeof(__rw_params), buf, gpu_mpi::plainTypeSize(datatype)*count);
+    memcpy(w_params.layout, fh.views[rank].layout, layout_size);
+    memcpy(w_params.buf, buf, datatype.size()*count);
+    printf("WRITE POS: %d, rank, %d\n", w_params.seek_pos, rank);
 
     //execute on CPU
     delegate_to_host((void*)data, buffer_size);

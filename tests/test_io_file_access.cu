@@ -74,14 +74,14 @@ struct FileSize {
         MPI_Info info;
         MPI_File fh;
         MPI_File_open(MPI_COMM_WORLD, "1.txt", MPI_MODE_RDWR | MPI_MODE_CREATE, info, &fh);
-        if (rank == 0) MPI_File_write(fh, "a", 1, MPI_CHAR, nullptr);
+        if (rank == 0) MPI_File_write(fh, "aaa", 3, MPI_CHAR, nullptr);
 
         MPI_Offset size;
         MPI_File_get_size(fh, &size);
 
         MPI_File_close(&fh);
 
-        ok = size == 1;
+        ok = size == 3;
 
         MPI_Finalize();
     }

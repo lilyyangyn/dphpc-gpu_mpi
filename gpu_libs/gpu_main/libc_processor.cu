@@ -33,11 +33,32 @@ void process_gpu_libc(void* mem, size_t size) {
     if(get_i_flag(mem) == I_FWRITE){
         char * data = (char *)mem;
         __rw_params w_params = *((__rw_params*)data);
-        // //TODO: MPI_Type_size not implemented
-        // assert(w_params.datatype==MPI_CHAR);
-        //seek pos
-        fseek(w_params.file,w_params.seek_pos,SEEK_SET);
-        ((size_t*)mem)[1] = fwrite( w_params.buf, w_params.etype_size, w_params.count, w_params.file);
+        if(w_params.layout_count == 1){
+            // contiguous, no gap
+            fseek(w_params.file,w_params.seek_pos,SEEK_SET);
+            ((size_t*)mem)[1] = fwrite( w_params.buf, w_params.etype_size, w_params.count, w_params.file);
+        } else {
+            // with gap
+            int written_count = 0;
+            int idx = -1;
+            int seek_pos = w_params.seek_pos;
+            size_t written_size = 0;
+            while(written_count < w_params.count){
+                idx++;
+                if(idx == w_params.layout_count){
+                    seek_pos += w_params.layout[idx-1].disp + w_params.layout[idx-1].count * w_params.etype_size;
+                    idx %= w_params.layout_count;
+
+                }
+
+                fseek(w_params.file, seek_pos+w_params.layout[idx].disp, SEEK_SET);
+                written_size += fwrite( (char*)w_params.buf + written_count * w_params.etype_size, w_params.etype_size, w_params.layout[idx].count, w_params.file);
+                written_count += w_params.layout[idx].count;
+                // printf("Written_count: %d, count: %d, pos: %d\n", written_count, w_params.layout[idx].count, seek_pos+w_params.layout[idx].disp);
+            }
+            ((size_t*)mem)[1] = written_size;
+        }
+
         set_i_ready_flag(mem);
     }
     if(get_i_flag(mem) == I_FOPEN){
@@ -68,11 +89,32 @@ void process_gpu_libc(void* mem, size_t size) {
         //     int count;
         // } r_param = *((rw_params*)((char*)mem + sizeof(int)));
         __rw_params r_params = *((__rw_params*)mem);
-        fseek(r_params.file,r_params.seek_pos,SEEK_SET);
-        ((size_t*)mem)[1] = fread(r_params.buf, r_params.etype_size, r_params.count, r_params.file);
-        // p507 l42
-        // nb. fread() forwards the file pointer, so no need to manually forward it.
-        
+        if(r_params.layout_count == 1){
+            // contiguous, no gap
+            fseek(r_params.file,r_params.seek_pos,SEEK_SET);
+            ((size_t*)mem)[1] = fread(r_params.buf, r_params.etype_size, r_params.count, r_params.file);
+            // p507 l42
+            // nb. fread() forwards the file pointer, so no need to manually forward it.
+        } else {
+            // with gap
+            int read_count = 0;
+            int idx = -1;
+            int seek_pos = r_params.seek_pos;
+            size_t read_size = 0;
+            while(read_count < r_params.count){
+                idx++;
+                if(idx == r_params.layout_count){
+                    seek_pos += r_params.layout[idx-1].disp + r_params.layout[idx-1].count * r_params.etype_size;
+                    idx %= r_params.layout_count;
+
+                }
+
+                fseek(r_params.file, seek_pos+r_params.layout[idx].disp, SEEK_SET);
+                read_size += fread((char*)r_params.buf + read_count * r_params.etype_size, r_params.etype_size, r_params.layout[idx].count, r_params.file);
+                read_count += r_params.layout[idx].count;
+            }
+            ((size_t*)mem)[1] = read_size;
+        }
         set_i_ready_flag(mem);
     }
     if(get_i_flag(mem) == I_FDELETE){

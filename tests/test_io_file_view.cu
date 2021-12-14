@@ -160,13 +160,16 @@ struct FileViewRWContiguous {
         char* rbuf = (char *)malloc(N*etype.size());
         for (int i=0;i<N;i++){
             wbuf[i]=('0' + rank);
+            rbuf[i]='?';
         }
         
         MPI_File_open(MPI_COMM_WORLD, "viewcontigious.txt", MPI_MODE_RDWR | MPI_MODE_CREATE, info, &fh);
         MPI_File_set_view(fh, disp, etype, arraytype, datarep, info);
 
+        MPI_File_seek(fh, 0, MPI_SEEK_SET);
         MPI_File_write(fh, wbuf, N, my_etype, nullptr);
         MPI_Barrier(MPI_COMM_WORLD);
+        MPI_File_seek(fh, 0, MPI_SEEK_SET);
         MPI_File_read(fh, rbuf, N, my_etype, nullptr);
 
         MPI_File_close(&fh);
@@ -210,7 +213,7 @@ struct FileViewRWVector {
 
         int npes; 
         MPI_Comm_size(MPI_COMM_WORLD, &npes);
-        MPI_Type_vector(2, NW, NW*npes, etype, &arraytype);
+        MPI_Type_vector(2, NW, NW*(npes+1), etype, &arraytype);
         MPI_Type_commit(&arraytype);
         disp = rank*etype.size()*NW; 
         const char* datarep = "native";
@@ -219,16 +222,19 @@ struct FileViewRWVector {
         char* rbuf = (char *)malloc(2*NW*etype.size());
         for (int i=0;i<2*NW;i++){
             wbuf[i]=('0' + rank);
+            rbuf[i]='?';
         }
         // printf("filetype size: %d\n", arraytype.size());
         
         MPI_File_open(MPI_COMM_WORLD, "viewvector.txt", MPI_MODE_RDWR | MPI_MODE_CREATE, info, &fh);
         MPI_File_set_view(fh, disp, etype, arraytype, datarep, info);
 
+        MPI_File_seek(fh, 0, MPI_SEEK_SET);
         MPI_File_write(fh, wbuf, NW*2, my_etype, nullptr);
 
         MPI_Barrier(MPI_COMM_WORLD);
 
+        MPI_File_seek(fh, 0, MPI_SEEK_SET);
         MPI_File_read(fh, rbuf, NW*2, my_etype, nullptr);
 
         MPI_File_close(&fh);

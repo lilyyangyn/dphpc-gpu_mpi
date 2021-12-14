@@ -80,13 +80,48 @@ struct MPI_Info{
     // todo
 };  
 
+struct layout_segment {int disp; int count;};
 struct MPI_File_View{
     MPI_Offset disp;
     MPI_Datatype etype;
     MPI_Datatype filetype;
     const char* datarep;
+    int layout_len;
+    layout_segment layout[TYPEMAP_MAXLEN];
     __device__ MPI_File_View(MPI_Offset disp, MPI_Datatype etype, MPI_Datatype filetype, const char* datarep)
-    :disp(disp),etype(etype),filetype(filetype),datarep(datarep){}
+    :disp(disp),etype(etype),filetype(filetype),datarep(datarep){
+        // assume all basic_types in filetype are the same to etype
+        layout_len = 1;
+        int filetype_disp = filetype.typemap[0].disp;
+        for(int i = 1; i < filetype.typemap_len; i++){
+            int new_filetype_disp = filetype.typemap[i].disp;
+            // printf("TYPEMAP -- disp: %d, etype_size: %d, new_disp: %d\n", filetype_disp, (int)etype.size(), new_filetype_disp);
+            if(filetype_disp + etype.size() != new_filetype_disp){
+                layout_len++;
+            }
+            filetype_disp = new_filetype_disp;
+        }
+
+        filetype_disp = filetype.typemap[0].disp;
+        if(layout_len != 1){
+            int seg_count = 1;
+            int seg_idx = 0;
+            for(int i = 1; i < filetype.typemap_len; i++){
+                int new_filetype_disp = filetype.typemap[i].disp;
+                if(filetype_disp + etype.size() != new_filetype_disp){
+                    layout[seg_idx].disp = filetype_disp;
+                    layout[seg_idx].count = seg_count;
+                    seg_count = 1;
+                }else{
+                    seg_count++;
+                }
+                filetype_disp = new_filetype_disp;
+            }
+        }else{
+            layout[0].disp = filetype_disp;
+            layout[0].count = filetype.typemap_len;
+        }
+    }
     __device__ MPI_File_View(){}
 };
 
@@ -113,10 +148,12 @@ struct __rw_params {
     void* buf;
     int count;
     int seek_pos;
+    int layout_count;
+    layout_segment* layout; 
     // __device__ __rw_params(int a,FILE* f, MPI_Datatype d, void*b, int c, int s)
     // :acttype(a),file(f),datatype(d),buf(b),count(c),seek_pos(s){}
-    __device__ __rw_params(int a,FILE* f, int d, void*b, int c, int s)
-    :acttype(a),file(f),etype_size(d),buf(b),count(c),seek_pos(s){}
+    __device__ __rw_params(int a,FILE* f, int d, void*b, int c, int s, int lc, layout_segment* l)
+    :acttype(a),file(f),etype_size(d),buf(b),count(c),seek_pos(s), layout_count(lc), layout(l){}
 };
 
 /* ------FILE MANIPULATION------ */
