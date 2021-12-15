@@ -61,22 +61,41 @@ struct MPI_Datatype {  // MPI datatype in extended format, for customized dataty
     size_t _size;  // extent of this datatype (including padding spaces)
     // char name[TYPENAME_MAXLEN];
     bool committed;
-    struct pii {int basic_type;  int disp;} typemap[TYPEMAP_MAXLEN];
+    struct pii {MPI_Datatype_Basic basic_type;  int disp;} typemap[TYPEMAP_MAXLEN];
     int typemap_len;
+    int typemap_gap;
     // int mul;  MPI_Datatype_Ext* subtype;  // provisioned, maybe for tree-shape optimized storage
 
-    __device__ MPI_Datatype(): committed(false), _size(0), typemap_len(0) {}
-    __device__ MPI_Datatype(MPI_Datatype_Basic in_type): committed(true), _size(gpu_mpi::plainTypeSize(in_type)), typemap_len(1)
+    __device__ MPI_Datatype(): committed(false), _size(0), typemap_len(0), typemap_gap(0) {}
+    __device__ MPI_Datatype(MPI_Datatype_Basic in_type): committed(true), _size(gpu_mpi::plainTypeSize(in_type)), typemap_len(1), typemap_gap(0)
     {
         typemap[0].basic_type = in_type;
         typemap[0].disp = 0;
     }  // for porting to MPI_Datatype_Basic
     __device__ operator MPI_Datatype_Basic() const {
         assert(typemap_len==1);
+        assert(typemap_gap==0);
         return MPI_Datatype_Basic(typemap[0].basic_type);
     } //- return value type does not match the function type
 
     __device__ size_t size() const {return _size;}
+    __device__ size_t add_typemap_at_end(const MPI_Datatype etype, int gap)
+    {
+        assert(etype.typemap_len + typemap_len <= TYPEMAP_MAXLEN);
+
+        // if is the first element, ignore gap, i.e. the first disp in typemap is always 0
+        int start = typemap_len == 0 ? 0 : gap + typemap[typemap_len-1].disp + gpu_mpi::plainTypeSize(typemap[typemap_len-1].basic_type);
+        for (int i = 0; i < etype.typemap_len; i++)
+        {
+            typemap[typemap_len + i].basic_type = (etype.typemap)[i].basic_type;
+            typemap[typemap_len + i].disp       = start + (etype.typemap)[i].disp;
+        }
+        _size += _size == 0 ? etype.size() : etype.size() + gap;
+        typemap_len += etype.typemap_len;
+
+        return _size;
+    }
+
     __device__ friend bool operator == (const MPI_Datatype a, const MPI_Datatype_Basic b)
     {
         if (a.typemap_len != 1) return false;
