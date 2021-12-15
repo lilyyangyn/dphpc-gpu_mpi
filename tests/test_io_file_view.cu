@@ -213,14 +213,18 @@ struct FileViewRWVector {
 
         int npes; 
         MPI_Comm_size(MPI_COMM_WORLD, &npes);
-        MPI_Type_vector(2, NW, NW*(npes+1), etype, &arraytype);
+        MPI_Type_vector(2, NW, NW*npes, etype, &arraytype);
         MPI_Type_commit(&arraytype);
+        // for (int i = 0; i < arraytype.typemap_len; i++){
+        //     printf("-- TYPEMAP -- idx: %d, disp: %d\n", i, arraytype.typemap[i].disp);
+        // }
+
         disp = rank*etype.size()*NW; 
         const char* datarep = "native";
 
-        char* wbuf = (char *)malloc(2*NW*etype.size());
-        char* rbuf = (char *)malloc(2*NW*etype.size());
-        for (int i=0;i<2*NW;i++){
+        char* wbuf = (char *)malloc(3*NW*etype.size());
+        char* rbuf = (char *)malloc(3*NW*etype.size());
+        for (int i=0;i<3*NW;i++){
             wbuf[i]=('0' + rank);
             rbuf[i]='?';
         }
@@ -228,20 +232,23 @@ struct FileViewRWVector {
         
         MPI_File_open(MPI_COMM_WORLD, "viewvector.txt", MPI_MODE_RDWR | MPI_MODE_CREATE, info, &fh);
         MPI_File_set_view(fh, disp, etype, arraytype, datarep, info);
+        // printf("-- SET VIEW -- disp: %d, file_disp: %d, rank, %d\n", disp, fh.views[rank].disp, rank);
 
+        // printf("SEEK POS BEFORE: %d, rank, %d\n", fh.seek_pos[rank], rank);
         MPI_File_seek(fh, 0, MPI_SEEK_SET);
-        MPI_File_write(fh, wbuf, NW*2, my_etype, nullptr);
+        // printf("SEEK POS AFTER: %d, rank, %d\n", fh.seek_pos[rank], rank);
+        MPI_File_write(fh, wbuf, NW*3, my_etype, nullptr);
 
         MPI_Barrier(MPI_COMM_WORLD);
 
         MPI_File_seek(fh, 0, MPI_SEEK_SET);
-        MPI_File_read(fh, rbuf, NW*2, my_etype, nullptr);
+        MPI_File_read(fh, rbuf, NW*3, my_etype, nullptr);
 
         MPI_File_close(&fh);
 
         // ok = *wbuf==*rbuf;
-        for (int i=0;i<2*NW;i++){
-            printf("rank: %d, i: %d, w: %c, r: %c\n", rank, i, wbuf[i], rbuf[i]);
+        for (int i=0;i<3*NW;i++){
+            // printf("rank: %d, i: %d, w: %c, r: %c\n", rank, i, wbuf[i], rbuf[i]);
             ok = wbuf[i]==rbuf[i];
             if (ok == false){
                 break;

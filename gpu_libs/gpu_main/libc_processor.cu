@@ -42,19 +42,19 @@ void process_gpu_libc(void* mem, size_t size) {
             int written_count = 0;
             int idx = -1;
             int seek_pos = w_params.seek_pos;
+            // printf("Written_pos: %d\n", seek_pos);
             size_t written_size = 0;
             while(written_count < w_params.count){
                 idx++;
                 if(idx == w_params.layout_count){
-                    seek_pos += w_params.layout[idx-1].disp + w_params.layout[idx-1].count * w_params.etype_size;
+                    seek_pos += w_params.layout[idx-1].disp + w_params.layout[idx-1].count * w_params.etype_size + w_params.layout_gap;
                     idx %= w_params.layout_count;
-
                 }
 
                 fseek(w_params.file, seek_pos+w_params.layout[idx].disp, SEEK_SET);
                 written_size += fwrite( (char*)w_params.buf + written_count * w_params.etype_size, w_params.etype_size, w_params.layout[idx].count, w_params.file);
                 written_count += w_params.layout[idx].count;
-                // printf("Written_count: %d, count: %d, pos: %d\n", written_count, w_params.layout[idx].count, seek_pos+w_params.layout[idx].disp);
+                // printf("Written_count: %d, count: %d, pos: %d, disp: %d\n", written_count, w_params.layout[idx].count, seek_pos+w_params.layout[idx].disp, w_params.layout[idx].disp);
             }
             ((size_t*)mem)[1] = written_size;
         }
@@ -104,7 +104,7 @@ void process_gpu_libc(void* mem, size_t size) {
             while(read_count < r_params.count){
                 idx++;
                 if(idx == r_params.layout_count){
-                    seek_pos += r_params.layout[idx-1].disp + r_params.layout[idx-1].count * r_params.etype_size;
+                    seek_pos += r_params.layout[idx-1].disp + r_params.layout[idx-1].count * r_params.etype_size + r_params.layout_gap;
                     idx %= r_params.layout_count;
 
                 }

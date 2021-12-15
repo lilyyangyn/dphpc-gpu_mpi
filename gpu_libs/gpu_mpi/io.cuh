@@ -106,17 +106,23 @@ struct MPI_File_View{
         if(layout_len != 1){
             int seg_count = 1;
             int seg_idx = 0;
+            layout[seg_idx].disp = filetype_disp;
             for(int i = 1; i < filetype.typemap_len; i++){
                 int new_filetype_disp = filetype.typemap[i].disp;
                 if(filetype_disp + etype.size() != new_filetype_disp){
-                    layout[seg_idx].disp = filetype_disp;
                     layout[seg_idx].count = seg_count;
                     seg_count = 1;
+                    seg_idx++;
+                    layout[seg_idx].disp = new_filetype_disp;
                 }else{
                     seg_count++;
                 }
                 filetype_disp = new_filetype_disp;
             }
+            layout[seg_idx].count = seg_count;
+            // for (int i = 0; i < layout_len; i++){
+            //     printf("-- LAYOUT -- seg_idx: %d, disp: %d, count: %d\n", i, layout[i].disp, layout[i].count);
+            // }
         }else{
             layout[0].disp = filetype_disp;
             layout[0].count = filetype.typemap_len;
@@ -149,11 +155,12 @@ struct __rw_params {
     int count;
     int seek_pos;
     int layout_count;
+    int layout_gap;
     layout_segment* layout; 
     // __device__ __rw_params(int a,FILE* f, MPI_Datatype d, void*b, int c, int s)
     // :acttype(a),file(f),datatype(d),buf(b),count(c),seek_pos(s){}
-    __device__ __rw_params(int a,FILE* f, int d, void*b, int c, int s, int lc, layout_segment* l)
-    :acttype(a),file(f),etype_size(d),buf(b),count(c),seek_pos(s), layout_count(lc), layout(l){}
+    __device__ __rw_params(int a,FILE* f, int d, void*b, int c, int s, int lc, int g, layout_segment* l)
+    :acttype(a),file(f),etype_size(d),buf(b),count(c),seek_pos(s), layout_count(lc), layout_gap(g), layout(l){}
 };
 
 /* ------FILE MANIPULATION------ */
