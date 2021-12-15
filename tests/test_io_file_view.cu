@@ -222,9 +222,9 @@ struct FileViewRWVector {
         disp = rank*etype.size()*NW; 
         const char* datarep = "native";
 
-        char* wbuf = (char *)malloc(3*NW*etype.size());
-        char* rbuf = (char *)malloc(3*NW*etype.size());
-        for (int i=0;i<3*NW;i++){
+        char* wbuf = (char *)malloc((npes+1)*NW*etype.size());
+        char* rbuf = (char *)malloc((npes+1)*NW*etype.size());
+        for (int i=0;i<(npes+1)*NW;i++){
             wbuf[i]=('0' + rank);
             rbuf[i]='?';
         }
@@ -237,17 +237,17 @@ struct FileViewRWVector {
         // printf("SEEK POS BEFORE: %d, rank, %d\n", fh.seek_pos[rank], rank);
         MPI_File_seek(fh, 0, MPI_SEEK_SET);
         // printf("SEEK POS AFTER: %d, rank, %d\n", fh.seek_pos[rank], rank);
-        MPI_File_write(fh, wbuf, NW*3, my_etype, nullptr);
+        MPI_File_write(fh, wbuf, NW*(npes+1), my_etype, nullptr);
 
         MPI_Barrier(MPI_COMM_WORLD);
 
         MPI_File_seek(fh, 0, MPI_SEEK_SET);
-        MPI_File_read(fh, rbuf, NW*3, my_etype, nullptr);
+        MPI_File_read(fh, rbuf, NW*(npes+1), my_etype, nullptr);
 
         MPI_File_close(&fh);
 
         // ok = *wbuf==*rbuf;
-        for (int i=0;i<3*NW;i++){
+        for (int i=0;i<(npes+1)*NW;i++){
             // printf("rank: %d, i: %d, w: %c, r: %c\n", rank, i, wbuf[i], rbuf[i]);
             ok = wbuf[i]==rbuf[i];
             if (ok == false){
@@ -263,6 +263,6 @@ struct FileViewRWVector {
 };
 
 TEST_CASE("FileViewRWVector", "[FileViewRWVector]") {
-    TestRunner testRunner(2);
+    TestRunner testRunner(3);
     testRunner.run<FileViewRWVector>();
 }
