@@ -22,7 +22,7 @@ MPI_OPERATORS_LIST(MPI_OP_LIST_DEF_F, MPI_OP_LIST_DEF_SEP)
 #undef MPI_OP_LIST_DEF_SEP
 
 namespace {
-template <MPI_Datatype Type> struct IsIntegerType { enum { value = false }; };
+template <MPI_Datatype_Basic Type> struct IsIntegerType { enum { value = false }; };
 
 template <> struct IsIntegerType<             MPI_SHORT> { enum { value = true }; };
 template <> struct IsIntegerType<               MPI_INT> { enum { value = true }; };
@@ -44,28 +44,28 @@ template <> struct IsIntegerType<          MPI_UINT16_T> { enum { value = true }
 template <> struct IsIntegerType<          MPI_UINT32_T> { enum { value = true }; };
 template <> struct IsIntegerType<          MPI_UINT64_T> { enum { value = true }; };
 
-template <MPI_Datatype Type> struct IsFloatingType { enum { value = false }; };
+template <MPI_Datatype_Basic Type> struct IsFloatingType { enum { value = false }; };
 
 template <> struct IsFloatingType<            MPI_FLOAT> { enum { value = true }; };
 template <> struct IsFloatingType<           MPI_DOUBLE> { enum { value = true }; };
 template <> struct IsFloatingType<      MPI_LONG_DOUBLE> { enum { value = true }; };
 
-template <MPI_Datatype Type> struct IsLogicalType { enum { value = false }; };
+template <MPI_Datatype_Basic Type> struct IsLogicalType { enum { value = false }; };
 
 template <> struct IsLogicalType <           MPI_C_BOOL> { enum { value = true }; };
 
-template <MPI_Datatype Type> struct IsComplexType { enum { value = false }; };
+template <MPI_Datatype_Basic Type> struct IsComplexType { enum { value = false }; };
 
 template <> struct IsComplexType<        MPI_C_COMPLEX> { enum { value = true }; };
 template <> struct IsComplexType<  MPI_C_FLOAT_COMPLEX> { enum { value = true }; };
 template <> struct IsComplexType< MPI_C_DOUBLE_COMPLEX> { enum { value = true }; };
 template <> struct IsComplexType<MPI_C_LONG_DOUBLE_COMPLEX> { enum { value = true }; };
 
-template <MPI_Datatype Type> struct IsByteType { enum { value = false }; };
+template <MPI_Datatype_Basic Type> struct IsByteType { enum { value = false }; };
 
 template <> struct IsByteType   <             MPI_BYTE> { enum { value = true }; };
 
-template <MPI_Datatype Type> struct IsTextType { enum { value = false }; };
+template <MPI_Datatype_Basic Type> struct IsTextType { enum { value = false }; };
 
 template <> struct IsTextType   <             MPI_CHAR> { enum { value = true }; };
 template <> struct IsTextType   <            MPI_WCHAR> { enum { value = true }; };
@@ -150,51 +150,51 @@ struct OpMinLoc {
     }
 };
 
-template <MPI_Datatype T, template <class> class Op, class Enable = void>
+template <MPI_Datatype_Basic T, template <class> class Op, class Enable = void>
 struct IsTypeOpAllowed { constexpr static bool value = false; };
 
-template <MPI_Datatype T>
+template <MPI_Datatype_Basic T>
 struct IsTypeOpAllowed<T, OpMax, std::enable_if_t<IsIntegerType<T>::value || IsFloatingType<T>::value>> { constexpr static bool value = true; };
 
-template <MPI_Datatype T>
+template <MPI_Datatype_Basic T>
 struct IsTypeOpAllowed<T, OpMin, std::enable_if_t<IsIntegerType<T>::value || IsFloatingType<T>::value>> { constexpr static bool value = true; };
 
-template <MPI_Datatype T>
+template <MPI_Datatype_Basic T>
 struct IsTypeOpAllowed<T, OpSum, std::enable_if_t<IsIntegerType<T>::value || IsFloatingType<T>::value || IsComplexType<T>::value>> {
     constexpr static bool value = true;
 };
 
-template <MPI_Datatype T>
+template <MPI_Datatype_Basic T>
 struct IsTypeOpAllowed<T, OpProd, std::enable_if_t<IsIntegerType<T>::value || IsFloatingType<T>::value || IsComplexType<T>::value>> {
     constexpr static bool value = true;
 };
 
-template <MPI_Datatype T>
+template <MPI_Datatype_Basic T>
 struct IsTypeOpAllowed<T, OpLAnd, std::enable_if_t<IsIntegerType<T>::value || IsLogicalType<T>::value>> {
     constexpr static bool value = true;
 };
 
-template <MPI_Datatype T>
+template <MPI_Datatype_Basic T>
 struct IsTypeOpAllowed<T, OpLOr, std::enable_if_t<IsIntegerType<T>::value || IsLogicalType<T>::value>> {
     constexpr static bool value = true;
 };
 
-template <MPI_Datatype T>
+template <MPI_Datatype_Basic T>
 struct IsTypeOpAllowed<T, OpLXor, std::enable_if_t<IsIntegerType<T>::value || IsLogicalType<T>::value>> {
     constexpr static bool value = true;
 };
 
-template <MPI_Datatype T>
+template <MPI_Datatype_Basic T>
 struct IsTypeOpAllowed<T, OpBAnd, std::enable_if_t<IsIntegerType<T>::value || IsByteType<T>::value>> {
     constexpr static bool value = true;
 };
 
-template <MPI_Datatype T>
+template <MPI_Datatype_Basic T>
 struct IsTypeOpAllowed<T, OpBOr, std::enable_if_t<IsIntegerType<T>::value || IsByteType<T>::value>> {
     constexpr static bool value = true;
 };
 
-template <MPI_Datatype T>
+template <MPI_Datatype_Basic T>
 struct IsTypeOpAllowed<T, OpBXor, std::enable_if_t<IsIntegerType<T>::value || IsByteType<T>::value>> {
     constexpr static bool value = true;
 };
@@ -236,7 +236,7 @@ __device__ void OpDispatcher(void* invec, void* inoutvec, int *len, MPI_Datatype
 
 
 
-} // namspace
+} // namespace
 
 struct MPI_Op_impl {
     __device__ MPI_Op_impl(MPI_User_function* fn) : user_fn(fn) {}

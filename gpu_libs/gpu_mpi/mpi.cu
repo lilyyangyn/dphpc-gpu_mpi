@@ -234,13 +234,41 @@ __device__ int MPI_Reduce(const void *sendbuf, void *recvbuf, int count,
     return MPI_SUCCESS;
 }
 
+// extern std::list<MPI_Datatype*> Typelist;
+
 __device__ int MPI_Type_contiguous(int count, MPI_Datatype oldtype, MPI_Datatype *newtype) {
-    NOT_IMPLEMENTED;
+    // newtype -> _size = count * oldtype.size();
+    // newtype -> typemap_len = count * oldtype.typemap_len;
+    // for (int i = 0; i < count; i++) copy_typemap_once(newtype, oldtype, i, 0);
+    // newtype -> committed = false;
+    MPI_Datatype contiguousType;
+    for (int i = 0; i < count; i++) contiguousType.add_typemap_at_end(oldtype, 0);
+    *newtype = contiguousType;
+    return MPI_SUCCESS;
+}
+
+__device__ int MPI_Type_vector(int count, int blocklength, int stride, MPI_Datatype oldtype, MPI_Datatype *newtype) {
+    if (blocklength == 0 || stride == 0) return MPI_ERR_OTHER;
+    if (stride < blocklength) return MPI_ERR_OTHER;
+    // In all our use cases, we do not allow a typemap to overlap itself.
+
+    MPI_Datatype vectorType;
+    int gap = (int)(stride - blocklength) * oldtype.size();
+    for(int i = 0; i < count; i++){
+        vectorType.add_typemap_at_end(oldtype, gap);
+        for(int j = 1; j < blocklength; j++){
+            vectorType.add_typemap_at_end(oldtype, 0);
+        }
+    }
+    vectorType.typemap_gap = gap;
+
+    *newtype = vectorType;  
     return MPI_SUCCESS;
 }
 
 __device__ int MPI_Type_commit(MPI_Datatype *datatype) {
-    NOT_IMPLEMENTED;
+    if (datatype -> committed == true) return MPI_SUCCESS;
+    datatype -> committed = true;  // Typelist.push_back(datatype);
     return MPI_SUCCESS;
 }
 
