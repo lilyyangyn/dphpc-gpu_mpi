@@ -159,6 +159,8 @@ struct MPI_File{
 
     MPI_File_View*  views;
 
+    int*            filesize;
+
     // todo
 };
 
