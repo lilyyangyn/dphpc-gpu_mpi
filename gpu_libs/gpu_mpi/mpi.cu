@@ -101,7 +101,7 @@ __device__ int MPI_Bcast_native(void* buffer, int size, int root) {
 __device__ int MPI_Bcast(void *buffer, int count, MPI_Datatype datatype,
                          int root, MPI_Comm comm)
 {
-    int dataSize = gpu_mpi::plainTypeSize(datatype) * count;
+    int dataSize = gpu_mpi::TypeSize(datatype) * count;
     assert(dataSize > 0);
 
     if (comm == MPI_COMM_WORLD) {
@@ -185,7 +185,7 @@ __device__ int MPI_Reduce(const void *sendbuf, void *recvbuf, int count,
         return MPI_Reduce_native(sendbuf, recvbuf, count, root);
     }
 
-    int elemSize = gpu_mpi::plainTypeSize(datatype);
+    int elemSize = gpu_mpi::TypeSize(datatype);
     int dataSize = elemSize * count;
     __gpu_assert(dataSize > 0);
     
@@ -326,8 +326,8 @@ __device__ int MPI_Gather(const void *sendbuf, int sendcount, MPI_Datatype sendt
     MPI_Comm_size(comm, &comm_size);
     MPI_Comm_rank(comm, &comm_rank);
 
-    int sendElemSize = gpu_mpi::plainTypeSize(sendtype);
-    int recvElemSize = gpu_mpi::plainTypeSize(recvtype);
+    int sendElemSize = gpu_mpi::TypeSize(sendtype);
+    int recvElemSize = gpu_mpi::TypeSize(recvtype);
     assert(sendElemSize > 0);
     assert(recvElemSize > 0);
 
@@ -398,8 +398,8 @@ __device__ int MPI_Alltoallv(
     MPI_Comm_size(comm, &comm_size);
     MPI_Comm_rank(comm, &comm_rank);
 
-    int sendElemSize = gpu_mpi::plainTypeSize(sendtype);
-    int recvElemSize = gpu_mpi::plainTypeSize(recvtype);
+    int sendElemSize = gpu_mpi::TypeSize(sendtype);
+    int recvElemSize = gpu_mpi::TypeSize(recvtype);
 
     MPI_Request* send_requests = (MPI_Request*) malloc(sizeof(MPI_Request) * comm_size);
     MPI_Request* recv_requests = (MPI_Request*) malloc(sizeof(MPI_Request) * comm_size);
@@ -464,13 +464,13 @@ __device__ int MPI_Gatherv(const void *sendbuf, int sendcount, MPI_Datatype send
     MPI_Comm_size(comm, &comm_size);
     MPI_Comm_rank(comm, &comm_rank);
 
-    int sendElemSize = gpu_mpi::plainTypeSize(sendtype);
+    int sendElemSize = gpu_mpi::TypeSize(sendtype);
     assert(sendElemSize > 0);
 
     if (comm_rank != root) {
         MPI_Send(sendbuf, sendcount, sendtype, root, MPI_COLLECTIVE_TAG, comm);
     } else {
-        int recvElemSize = gpu_mpi::plainTypeSize(recvtype);
+        int recvElemSize = gpu_mpi::TypeSize(recvtype);
         assert(recvElemSize > 0);
         for (int r = 0; r < comm_size; r++) {
             if (r == root) {
@@ -493,8 +493,8 @@ __device__ int MPI_Scatter(const void *sendbuf, int sendcount, MPI_Datatype send
     MPI_Comm_size(comm, &comm_size);
     MPI_Comm_rank(comm, &comm_rank);
 
-    int sendElemSize = gpu_mpi::plainTypeSize(sendtype);
-    int recvElemSize = gpu_mpi::plainTypeSize(recvtype);
+    int sendElemSize = gpu_mpi::TypeSize(sendtype);
+    int recvElemSize = gpu_mpi::TypeSize(recvtype);
     assert(sendElemSize > 0);
     assert(recvElemSize > 0);
 
@@ -524,13 +524,13 @@ __device__ int MPI_Scatterv(const void *sendbuf, const int sendcounts[], const i
     MPI_Comm_size(comm, &comm_size);
     MPI_Comm_rank(comm, &comm_rank);
 
-    int recvElemSize = gpu_mpi::plainTypeSize(recvtype);
+    int recvElemSize = gpu_mpi::TypeSize(recvtype);
     assert(recvElemSize > 0);
 
     if (comm_rank != root) {
         MPI_Recv(recvbuf, recvcount, recvtype, root, MPI_COLLECTIVE_TAG, comm, MPI_STATUS_IGNORE);
     } else {
-        int sendElemSize = gpu_mpi::plainTypeSize(sendtype);
+        int sendElemSize = gpu_mpi::TypeSize(sendtype);
         assert(sendElemSize > 0);
         for (int r = 0; r < comm_size; r++) {
             if (r == root) {
@@ -573,7 +573,7 @@ __device__ int MPI_Irecv(void *buf, int count, MPI_Datatype datatype,
 {
     int ctx = gpu_mpi::getCommContext(comm);
     
-    int dataSize = gpu_mpi::plainTypeSize(datatype) * count;
+    int dataSize = gpu_mpi::TypeSize(datatype) * count;
     assert(dataSize > 0);
     
     CudaMPI::PendingOperation* op = CudaMPI::irecv(source, buf, dataSize, ctx, tag);
@@ -589,7 +589,7 @@ __device__ int MPI_Isend(const void *buf, int count, MPI_Datatype datatype, int 
 {
     int ctx = gpu_mpi::getCommContext(comm);
     
-    int dataSize = gpu_mpi::plainTypeSize(datatype) * count;
+    int dataSize = gpu_mpi::TypeSize(datatype) * count;
     assert(dataSize > 0);
     
     CudaMPI::PendingOperation* op = CudaMPI::isend(dest, buf, dataSize, ctx, tag);
