@@ -290,7 +290,7 @@ __device__ void __write_block(MPI_File* fh, int block_index, int start, int coun
     if(fh->status[block_index] == BLOCK_NOT_IN){
         // data not in buffer, read to from cpu
         fh->buffer[block_index].block = allocate_host_mem(INIT_BUFFER_BLOCK_SIZE);
-        memset(fh->buffer[block_index].block, 0, INIT_BUFFER_BLOCK_SIZE);
+        // memset(fh->buffer[block_index].block, 0, INIT_BUFFER_BLOCK_SIZE);
         __read_file(fh, block_index, seekpos);
         fh->status[block_index] = BLOCK_IN_CLEAN;
     }
