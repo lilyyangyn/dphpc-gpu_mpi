@@ -141,16 +141,17 @@ void process_gpu_libc(void* mem, size_t size) {
         FILE* file = ((FILE**)mem)[1];
         const void* buf = ((void**)mem)[2];
         int seekpos = ((int*)mem)[6];
+        int writebytes = ((int*)mem)[7];
         // printf("file %p, buf %p, seekpos %d\n", file, buf, seekpos);
         // fflush(stdout);
         int ret = fseek(file, seekpos, SEEK_SET);
         // perror("Error:");
         // printf("ret: %d\n", ret);
         assert(ret == 0);
-        int cnt = fwrite(buf, 1, INIT_BUFFER_BLOCK_SIZE, file);
+        int cnt = fwrite(buf, 1, writebytes, file);
         ((size_t*)mem)[1] = cnt;
-        assert(cnt == INIT_BUFFER_BLOCK_SIZE);
-        // printf("we write %d bytes: \n", cnt);
+        // assert(cnt == INIT_BUFFER_BLOCK_SIZE);
+        printf("we write %d bytes: \n", cnt);
         set_i_ready_flag(mem);
     }
 

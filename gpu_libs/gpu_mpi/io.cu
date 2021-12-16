@@ -17,7 +17,6 @@ namespace gpu_mpi {
 /* ------HELPER FUNCTIONS------ */
 
 __device__ void mutex_lock(unsigned int *mutex) {
-    unsigned int ns = 8;
     while (atomicCAS(mutex, 0, 1) == 1) {}
 }
 
@@ -247,7 +246,7 @@ __device__ int __read_buffer(MPI_File fh, void *buf, size_t size, size_t count, 
 }
 
 // TODO: ask CPU to write the buffer back to disk
-__device__ void __write_file(MPI_File* fh, MPI_Datatype datatype, int block_index, int seekpos){
+__device__ void __write_file(MPI_File* fh, MPI_Datatype datatype, int block_index, int seekpos, int writebytes){
     // printf("file %p, buf %p, seekpos %d\n", fh->file, fh->buffer[block_index], seekpos);
     // write specific block back to file
     int buffer_size = 128;
@@ -256,6 +255,7 @@ __device__ void __write_file(MPI_File* fh, MPI_Datatype datatype, int block_inde
     ((FILE**)data)[1] = fh->file;
     ((void**)data)[2] = fh->buffer[block_index].block;
     ((int*)data)[6] = seekpos;
+    ((int*)data)[7] = writebytes;
     delegate_to_host((void*)data, buffer_size);
     // wait
     while(((int*)data)[0] != I_READY){};
@@ -305,6 +305,7 @@ __device__ void __write_block(MPI_File* fh, int block_index, int start, int coun
     // printf("%s", "__write_block succeeds\n");
 }
 
+__device__ unsigned int sizelock = 0;
 __device__ int __write_buffer(MPI_File fh, const void *buf, size_t size, size_t count, int pos){
     int cur_block = pos / INIT_BUFFER_BLOCK_SIZE;
     int block_offset = pos % INIT_BUFFER_BLOCK_SIZE;
@@ -330,6 +331,14 @@ __device__ int __write_buffer(MPI_File fh, const void *buf, size_t size, size_t 
             num_block = 1 + remain / INIT_BUFFER_BLOCK_SIZE + 1;
         }
     }
+
+    // assume we can always write bytes_count, update the filesize if necessary
+    if( bytes_count + pos > *(fh.filesize)){
+        mutex_lock(&sizelock);
+        *(fh.filesize) = bytes_count + pos;
+        mutex_unlock(&sizelock);
+    }
+
     // printf("rank is %d, cur_block is %d, num_block is %d\n", rank, cur_block, num_block);
     // pointer to the buf we are reading from
     const void* buf_start = buf;
@@ -427,7 +436,7 @@ __device__ int MPI_File_open(MPI_Comm comm, const char *filename, int amode, MPI
                 *(shared_fh.shared_seek_pos) = init_pos;
 
                 #if USE_BUFFER
-                    // TODO: allocate and initialize buffer array, status array, size, shared_seek_pos
+                    // TODO: allocate and initialize buffer array, status array, size, shared_seek_pos, filesize
                     shared_fh.num_blocks = (int*)malloc(sizeof(int));
                     *(shared_fh.num_blocks) = INIT_BUFFER_BLOCK_NUM;
                     shared_fh.shared_seek_pos = (int*)malloc(sizeof(int));
@@ -439,6 +448,12 @@ __device__ int MPI_File_open(MPI_Comm comm, const char *filename, int amode, MPI
                         shared_fh.buffer[i].block = nullptr;
                         // shared_fh.buffer[i] = nullptr;
                         shared_fh.status[i] = BLOCK_NOT_IN;
+                    }
+                    shared_fh.filesize = (int*)malloc(sizeof(int));
+                    *(shared_fh.filesize) = 0;
+                    if((amode & MPI_MODE_RDWR) || (amode & MPI_MODE_RDONLY) || (amode & MPI_MODE_APPEND)){
+                        int sz = __get_file_size(shared_fh.file);
+                        *(shared_fh.filesize) = sz;
                     }
                 #endif
             }   
@@ -475,17 +490,18 @@ __device__ int MPI_File_delete(const char *filename, MPI_Info info){
 }
 
 __device__ int MPI_File_get_size(MPI_File fh, MPI_Offset *size){
-    int sz; 
+    // int sz; 
 
-    int rank;
-    MPI_Comm_rank(fh.comm, &rank);
-    if(rank == 0){
-        sz = __get_file_size(fh.file);
-    }
+    // int rank;
+    // MPI_Comm_rank(fh.comm, &rank);
+    // if(rank == 0){
+    //     sz = __get_file_size(fh.file);
+    // }
 
-    MPI_Barrier(fh.comm);
-    MPI_Bcast(&sz, 1, MPI_INT, 0, fh.comm);
-    *size = sz;
+    // MPI_Barrier(fh.comm);
+    // MPI_Bcast(&sz, 1, MPI_INT, 0, fh.comm);
+    // *size = sz;
+    *size = *(fh.filesize);
 
     return MPI_SUCCESS;
 } 
@@ -505,25 +521,30 @@ __device__ int MPI_File_close(MPI_File *fh){
         free(fh->shared_seek_pos);
 
         #if USE_BUFFER
-            // TODO: check status of buffer blocks, write dirty blocks back
+            // check status of buffer blocks, write dirty blocks back
             int num_blocks = *(fh->num_blocks);
             for(int i = 0; i < num_blocks; i++){
                 if(fh->status[i] == BLOCK_IN_DIRTY){
-                    // TODO: write back
-                    __write_file(fh, MPI_CHAR, i, i * INIT_BUFFER_BLOCK_SIZE);
+                    // write back
+                    // special check when it's the 'real' last block of the file 
+                    int writebytes = INIT_BUFFER_BLOCK_SIZE;
+                    if((i + 1) * INIT_BUFFER_BLOCK_SIZE - 1 > *(fh->filesize)){
+                        writebytes = *(fh->filesize) - i * INIT_BUFFER_BLOCK_SIZE;
+                    }
+                    __write_file(fh, fh->views->etype, i, i * INIT_BUFFER_BLOCK_SIZE, writebytes);
                     fh->status[i] = BLOCK_IN_CLEAN;
                 }
             }
 
-            // TODO: release buffer array
+            // release buffer array
             for(int i = 0; i < num_blocks; i++){
                 if(fh->status[i] != BLOCK_NOT_IN)
                     free_host_mem(fh->buffer[i].block);
             }
             free(fh->buffer);
-            // TODO: release status array
             free(fh->status);
             free(fh->num_blocks);
+            free(fh->filesize);
         #endif
     
         // close the file associated with file handle
