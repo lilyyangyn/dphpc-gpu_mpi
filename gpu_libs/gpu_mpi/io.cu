@@ -369,7 +369,7 @@ __device__ int __write_buffer(MPI_File fh, const void *buf, size_t size, size_t 
         buf_start = (const char*)buf_start + INIT_BUFFER_BLOCK_SIZE;
         seekpos += INIT_BUFFER_BLOCK_SIZE;
     }
-    return bytes_count/size;
+    return bytes_count / size;
 }
 
 #endif
@@ -663,11 +663,33 @@ __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype dat
         MPI_File_seek(fh, 0, MPI_SEEK_SET);
     }
     int cur_pos = fh.seek_pos[rank];
-    int read_count = __read_buffer(fh, buf, datatype.size(), count, cur_pos);
+
+    int read_size = 0;
+    MPI_File_View thread_view = fh.views[rank];
+    if(thread_view.layout_len == 1){
+        // contiguous, no gap
+        read_size = __read_buffer(fh, buf, datatype.size(), count, cur_pos);
+    }else{
+        // with gap
+        int idx = -1;
+        int read_count = 0;
+        int seek_pos = cur_pos;
+        size_t etype_size = datatype.size();
+        while(read_count < count){
+            idx++;
+            if(idx == thread_view.layout_len){
+                seek_pos += thread_view.layout[idx-1].disp + thread_view.layout[idx-1].count * etype_size + thread_view.filetype.typemap_gap;
+                idx %= thread_view.layout_len;
+            }
+
+            read_size += __read_buffer(fh, (char*)buf + read_count * etype_size, etype_size, thread_view.layout[idx].count, seek_pos+thread_view.layout[idx].disp);
+            read_count += thread_view.layout[idx].count;
+        }
+    }
     // assume we always can read count data
-    MPI_File_seek(fh, read_count*datatype.size(), MPI_SEEK_CUR);
+    MPI_File_seek(fh, read_size*datatype.size(), MPI_SEEK_CUR);
     
-    return read_count;
+    return read_size;
 }
 
 __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
@@ -684,11 +706,33 @@ __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datat
         MPI_File_seek(fh, 0, MPI_SEEK_SET);
     }
     int cur_pos = fh.seek_pos[rank];
-    int write_count = __write_buffer(fh, buf, datatype.size(), count, cur_pos);
-    // assume we can always write count data
-    MPI_File_seek(fh, write_count*datatype.size(), MPI_SEEK_CUR);
 
-    return write_count;
+    int write_size = 0;
+    MPI_File_View thread_view = fh.views[rank];
+    if(thread_view.layout_len == 1){
+        // contiguous, no gap
+        write_size = __write_buffer(fh, buf, datatype.size(), count, cur_pos);
+    }else{
+        // with gap
+        int idx = -1;
+        int write_count = 0;
+        int seek_pos = cur_pos;
+        size_t etype_size = datatype.size();
+        while(write_count < count){
+            idx++;
+            if(idx == thread_view.layout_len){
+                seek_pos += thread_view.layout[idx-1].disp + thread_view.layout[idx-1].count * etype_size + thread_view.filetype.typemap_gap;
+                idx %= thread_view.layout_len;
+            }
+
+            write_size += __write_buffer(fh, (char*)buf + write_count * etype_size, etype_size, thread_view.layout[idx].count, seek_pos+thread_view.layout[idx].disp);
+            write_count += thread_view.layout[idx].count;
+        }
+    }
+    // assume we can always write count data
+    MPI_File_seek(fh, write_size*datatype.size(), MPI_SEEK_CUR);
+
+    return write_size;
 }
 
 # else

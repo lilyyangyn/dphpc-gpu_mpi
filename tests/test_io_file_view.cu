@@ -263,6 +263,6 @@ struct FileViewRWVector {
 };
 
 TEST_CASE("FileViewRWVector", "[FileViewRWVector]") {
-    TestRunner testRunner(3);
+    TestRunner testRunner(4);
     testRunner.run<FileViewRWVector>();
 }
