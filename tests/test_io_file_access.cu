@@ -71,10 +71,10 @@ struct FileReadAmodeIncorrect {
     }
 };
 
-// TEST_CASE("FileReadAmodeIncorrect", "[FileReadAmodeIncorrect]") {
-//     TestRunner testRunner(1);
-//     testRunner.run<FileReadAmodeIncorrect>();
-// }
+TEST_CASE("FileReadAmodeIncorrect", "[FileReadAmodeIncorrect]") {
+    TestRunner testRunner(1);
+    testRunner.run<FileReadAmodeIncorrect>();
+}
 
 struct FileSize {
     static __device__ void run(bool& ok) {
@@ -102,10 +102,10 @@ struct FileSize {
     }
 };
 
-// TEST_CASE("FileSize", "[FileSize]") {
-//     TestRunner testRunner(2);
-//     testRunner.run<FileSize>();
-// }
+TEST_CASE("FileSize", "[FileSize]") {
+    TestRunner testRunner(2);
+    testRunner.run<FileSize>();
+}
 
 struct FileReadAnyPlaceAnyLen {
     static __device__ void run(bool& ok) {
@@ -138,10 +138,10 @@ struct FileReadAnyPlaceAnyLen {
     }
 };
 
-// TEST_CASE("FileReadAnyPlaceAnyLen", "[FileReadAnyPlaceAnyLen]") {
-//     TestRunner testRunner(1);
-//     testRunner.run<FileReadAnyPlaceAnyLen>();
-// }
+TEST_CASE("FileReadAnyPlaceAnyLen", "[FileReadAnyPlaceAnyLen]") {
+    TestRunner testRunner(1);
+    testRunner.run<FileReadAnyPlaceAnyLen>();
+}
 
 
 struct FileSharedRW {

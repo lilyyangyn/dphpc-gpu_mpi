@@ -68,12 +68,6 @@
 #define I_FDELETE                       8
 #define I_FCLOSE                        9
 
-#define I_FOPEN_MODE_RD                 0
-#define I_FOPEN_MODE_RW                 1
-#define I_FOPEN_MODE_WD                 2
-#define I_FOPEN_MODE_RW_APPEND          3
-#define I_FOPEN_MODE_WD_APPEND          4
-
 #define BLOCK_NOT_IN                    0
 #define BLOCK_IN_CLEAN                  1
 #define BLOCK_IN_DIRTY                  2
