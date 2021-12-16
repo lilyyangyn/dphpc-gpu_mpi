@@ -8,7 +8,7 @@
 /**
  * version switch
  */
- #define USE_BUFFER true
+#define USE_BUFFER true
 
 #define N 100
 namespace gpu_mpi {
@@ -547,20 +547,25 @@ __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype dat
 
     int rank;
     MPI_Comm_rank(fh.comm, &rank);
+    // If seek_pos smaller than the start of the valid area of the thread's view, then seek to the beginning
+    if(fh.seek_pos[rank] < fh.views[rank].disp) {
+        MPI_File_seek(fh, 0, MPI_SEEK_SET);
+    }
     int cur_pos = fh.seek_pos[rank];
     int cur_block = cur_pos / INIT_BUFFER_BLOCK_SIZE;
     int block_offset = cur_pos % INIT_BUFFER_BLOCK_SIZE;
     int num_block;
+    int bytes_count = count * datatype.size();
     if(block_offset == 0){
-        if(count % INIT_BUFFER_BLOCK_SIZE == 0){
-            num_block = count / INIT_BUFFER_BLOCK_SIZE;
+        if(bytes_count % INIT_BUFFER_BLOCK_SIZE == 0){
+            num_block = bytes_count / INIT_BUFFER_BLOCK_SIZE;
         }
         else{
-            num_block = count / INIT_BUFFER_BLOCK_SIZE + 1;
+            num_block = bytes_count / INIT_BUFFER_BLOCK_SIZE + 1;
         }
     }
     else{
-        int remain = count - (INIT_BUFFER_BLOCK_SIZE - block_offset);
+        int remain = bytes_count - (INIT_BUFFER_BLOCK_SIZE - block_offset);
         if(remain < 0){
             num_block = 1;
         }
@@ -574,11 +579,11 @@ __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype dat
 
     // pointer to the buf we are writing into
     void* buf_start = buf;
-    int remain_count = count;
+    int remain_count = bytes_count;
     int seekpos = cur_block * INIT_BUFFER_BLOCK_SIZE;
 
     if(block_offset != 0){
-        int read_size = (count >= (INIT_BUFFER_BLOCK_SIZE - block_offset))?(INIT_BUFFER_BLOCK_SIZE - block_offset):count;
+        int read_size = (bytes_count >= (INIT_BUFFER_BLOCK_SIZE - block_offset))?(INIT_BUFFER_BLOCK_SIZE - block_offset):bytes_count;
         __read_block(&fh, cur_block, block_offset, read_size, buf_start, seekpos);
         buf_start = (char*)buf_start + INIT_BUFFER_BLOCK_SIZE - block_offset;
         seekpos += INIT_BUFFER_BLOCK_SIZE;
@@ -599,30 +604,36 @@ __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype dat
     }
 
     // assume we always can read count data
-    fh.seek_pos[rank] += count;
-    return count;
+    MPI_File_seek(fh, bytes_count, MPI_SEEK_CUR);
+    
+    return bytes_count / datatype.size();
 }
 
 __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
     // TODO: check amode
-    assert(datatype == MPI_CHAR);
+    // assert(datatype == MPI_CHAR);
     // write into buffer
     int rank;
     MPI_Comm_rank(fh.comm, &rank);
+    // If seek_pos smaller than the start of the valid area of the thread's view, then seek to the beginning
+    if(fh.seek_pos[rank] < fh.views[rank].disp) {
+        MPI_File_seek(fh, 0, MPI_SEEK_SET);
+    }
     int cur_pos = fh.seek_pos[rank];
     int cur_block = cur_pos / INIT_BUFFER_BLOCK_SIZE;
     int block_offset = cur_pos % INIT_BUFFER_BLOCK_SIZE;
     int num_block;
+    int bytes_count = count * datatype.size();
     if(block_offset == 0){
-        if(count % INIT_BUFFER_BLOCK_SIZE == 0){
-            num_block = count / INIT_BUFFER_BLOCK_SIZE;
+        if(bytes_count % INIT_BUFFER_BLOCK_SIZE == 0){
+            num_block = bytes_count / INIT_BUFFER_BLOCK_SIZE;
         }
         else{
-            num_block = count / INIT_BUFFER_BLOCK_SIZE + 1;
+            num_block = bytes_count / INIT_BUFFER_BLOCK_SIZE + 1;
         }
     }
     else{
-        int remain = count - (INIT_BUFFER_BLOCK_SIZE - block_offset);
+        int remain = bytes_count - (INIT_BUFFER_BLOCK_SIZE - block_offset);
         if(remain < 0){
             num_block = 1;
         }
@@ -636,13 +647,13 @@ __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datat
     // printf("rank is %d, cur_block is %d, num_block is %d\n", rank, cur_block, num_block);
     // pointer to the buf we are reading from
     const void* buf_start = buf;
-    int remain_count = count;
+    int remain_count = bytes_count;
     int seekpos = cur_block * INIT_BUFFER_BLOCK_SIZE;
 
     // TODO: revice buffer structure, so that each block has a lock?
     // need to write partial of the first block
     if(block_offset != 0){
-        int write_size = (count >= (INIT_BUFFER_BLOCK_SIZE - block_offset))?(INIT_BUFFER_BLOCK_SIZE - block_offset):count;
+        int write_size = (bytes_count >= (INIT_BUFFER_BLOCK_SIZE - block_offset))?(INIT_BUFFER_BLOCK_SIZE - block_offset):bytes_count;
         __write_block(&fh, cur_block, block_offset, write_size, buf_start, seekpos);
         buf_start = (const char*)buf_start + INIT_BUFFER_BLOCK_SIZE - block_offset;
         seekpos += INIT_BUFFER_BLOCK_SIZE;
@@ -664,9 +675,9 @@ __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datat
         seekpos += INIT_BUFFER_BLOCK_SIZE;
     }
     // assume we can always write count data
-    fh.seek_pos[rank] += count;
+    MPI_File_seek(fh, bytes_count, MPI_SEEK_CUR);
 
-    return count;
+    return bytes_count / datatype.size();
 }
 
 # else
