@@ -16,26 +16,26 @@ struct FileRead {
         
         int w_buf = 6;
         #if USE_BUFFER
-            // MPI_File_write(fh, "a", 1, MPI_CHAR, nullptr);
-            MPI_File_write(fh, &w_buf, 1, MPI_INT, nullptr);
+            MPI_File_write(fh, "a", 1, MPI_CHAR, nullptr);
+            // MPI_File_write(fh, &w_buf, 1, MPI_INT, nullptr);
         #else
             int rank;
             MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-            // if (rank == 0) MPI_File_write(fh, "a", 1, MPI_CHAR, nullptr);
-            if (rank == 0) MPI_File_write(fh, &w_buf, 1, MPI_INT, nullptr);
+            if (rank == 0) MPI_File_write(fh, "a", 1, MPI_CHAR, nullptr);
+            // if (rank == 0) MPI_File_write(fh, &w_buf, 1, MPI_INT, nullptr);
         #endif
         MPI_File_close(&fh);
 
         MPI_File_open(MPI_COMM_WORLD, "1.txt", MPI_MODE_RDONLY, info, &fh);
-        // char buf;
-        int buf;
+        char buf;
+        // int buf;
         MPI_Status status;
-        // int read_size = MPI_File_read(fh, &buf, 1, MPI_CHAR, &status);
-        int read_size = MPI_File_read(fh, &buf, 1, MPI_INT, &status);
+        int read_size = MPI_File_read(fh, &buf, 1, MPI_CHAR, &status);
+        // int read_size = MPI_File_read(fh, &buf, 1, MPI_INT, &status);
         MPI_File_close(&fh);
         
-        // ok = read_size != 0;
-        ok = buf == 6;
+        ok = read_size != 0;
+        // ok = buf == 6;
 
         MPI_Finalize();
     }
@@ -102,10 +102,10 @@ struct FileSize {
     }
 };
 
-TEST_CASE("FileSize", "[FileSize]") {
-    TestRunner testRunner(2);
-    testRunner.run<FileSize>();
-}
+// TEST_CASE("FileSize", "[FileSize]") {
+//     TestRunner testRunner(2);
+//     testRunner.run<FileSize>();
+// }
 
 struct FileReadAnyPlaceAnyLen {
     static __device__ void run(bool& ok) {

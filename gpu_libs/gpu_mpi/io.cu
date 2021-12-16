@@ -191,6 +191,60 @@ __device__ void __read_block(MPI_File* fh, int block_index, int start, int count
     // printf("%s", "__read_block succeed\n");     
 }
 
+__device__ int __read_buffer(MPI_File fh, void *buf, size_t size, size_t count, int pos){
+    int cur_block = pos / INIT_BUFFER_BLOCK_SIZE;
+    int block_offset = pos % INIT_BUFFER_BLOCK_SIZE;
+    int num_block;
+    int bytes_count = count * size;
+    if(block_offset == 0){
+        if(bytes_count % INIT_BUFFER_BLOCK_SIZE == 0){
+            num_block = bytes_count / INIT_BUFFER_BLOCK_SIZE;
+        }
+        else{
+            num_block = bytes_count / INIT_BUFFER_BLOCK_SIZE + 1;
+        }
+    }
+    else{
+        int remain = bytes_count - (INIT_BUFFER_BLOCK_SIZE - block_offset);
+        if(remain < 0){
+            num_block = 1;
+        }
+        else if(remain % INIT_BUFFER_BLOCK_SIZE == 0){
+            num_block = 1 + remain / INIT_BUFFER_BLOCK_SIZE;
+        }
+        else{
+            num_block = 1 + remain / INIT_BUFFER_BLOCK_SIZE + 1;
+        }
+    }
+
+    // pointer to the buf we are writing into
+    void* buf_start = buf;
+    int remain_count = bytes_count;
+    int seekpos = cur_block * INIT_BUFFER_BLOCK_SIZE;
+
+    if(block_offset != 0){
+        int read_size = (bytes_count >= (INIT_BUFFER_BLOCK_SIZE - block_offset))?(INIT_BUFFER_BLOCK_SIZE - block_offset):bytes_count;
+        __read_block(&fh, cur_block, block_offset, read_size, buf_start, seekpos);
+        buf_start = (char*)buf_start + INIT_BUFFER_BLOCK_SIZE - block_offset;
+        seekpos += INIT_BUFFER_BLOCK_SIZE;
+        cur_block += 1;
+        num_block -= 1;
+        remain_count -= (INIT_BUFFER_BLOCK_SIZE - block_offset);
+    }
+    for(int i = 0; i < num_block; i++){
+        size_t read_size = INIT_BUFFER_BLOCK_SIZE;
+        size_t read_buffer_offset = 0;
+        // need to write partial of the last block
+        if(i == num_block - 1){
+            read_size = remain_count - i * INIT_BUFFER_BLOCK_SIZE;
+        }
+        __read_block(&fh, cur_block + i, read_buffer_offset, read_size, buf_start, seekpos);
+        buf_start = (char*)buf_start + INIT_BUFFER_BLOCK_SIZE;
+        seekpos += INIT_BUFFER_BLOCK_SIZE;
+    }
+    return bytes_count / size;
+}
+
 // TODO: ask CPU to write the buffer back to disk
 __device__ void __write_file(MPI_File* fh, MPI_Datatype datatype, int block_index, int seekpos, int writebytes){
     // printf("file %p, buf %p, seekpos %d\n", fh->file, fh->buffer[block_index], seekpos);
@@ -236,7 +290,7 @@ __device__ void __write_block(MPI_File* fh, int block_index, int start, int coun
     if(fh->status[block_index] == BLOCK_NOT_IN){
         // data not in buffer, read to from cpu
         fh->buffer[block_index].block = allocate_host_mem(INIT_BUFFER_BLOCK_SIZE);
-        memset(fh->buffer[block_index].block, 0, INIT_BUFFER_BLOCK_SIZE);
+        // memset(fh->buffer[block_index].block, 0, INIT_BUFFER_BLOCK_SIZE);
         __read_file(fh, block_index, seekpos);
         fh->status[block_index] = BLOCK_IN_CLEAN;
     }
@@ -249,6 +303,73 @@ __device__ void __write_block(MPI_File* fh, int block_index, int start, int coun
     fh->status[block_index] = BLOCK_IN_DIRTY;
     mutex_unlock(&fh->buffer[block_index].lock);
     // printf("%s", "__write_block succeeds\n");
+}
+
+__device__ unsigned int sizelock = 0;
+__device__ int __write_buffer(MPI_File fh, const void *buf, size_t size, size_t count, int pos){
+    int cur_block = pos / INIT_BUFFER_BLOCK_SIZE;
+    int block_offset = pos % INIT_BUFFER_BLOCK_SIZE;
+    int num_block;
+    int bytes_count = count * size;
+    if(block_offset == 0){
+        if(bytes_count % INIT_BUFFER_BLOCK_SIZE == 0){
+            num_block = bytes_count / INIT_BUFFER_BLOCK_SIZE;
+        }
+        else{
+            num_block = bytes_count / INIT_BUFFER_BLOCK_SIZE + 1;
+        }
+    }
+    else{
+        int remain = bytes_count - (INIT_BUFFER_BLOCK_SIZE - block_offset);
+        if(remain < 0){
+            num_block = 1;
+        }
+        else if(remain % INIT_BUFFER_BLOCK_SIZE == 0){
+            num_block = 1 + remain / INIT_BUFFER_BLOCK_SIZE;
+        }
+        else{
+            num_block = 1 + remain / INIT_BUFFER_BLOCK_SIZE + 1;
+        }
+    }
+
+    // assume we can always write bytes_count, update the filesize if necessary
+    if( bytes_count + pos > *(fh.filesize)){
+        mutex_lock(&sizelock);
+        *(fh.filesize) = bytes_count + pos;
+        mutex_unlock(&sizelock);
+    }
+
+    // printf("rank is %d, cur_block is %d, num_block is %d\n", rank, cur_block, num_block);
+    // pointer to the buf we are reading from
+    const void* buf_start = buf;
+    int remain_count = bytes_count;
+    int seekpos = cur_block * INIT_BUFFER_BLOCK_SIZE;
+
+    // TODO: revice buffer structure, so that each block has a lock?
+    // need to write partial of the first block
+    if(block_offset != 0){
+        int write_size = (bytes_count >= (INIT_BUFFER_BLOCK_SIZE - block_offset))?(INIT_BUFFER_BLOCK_SIZE - block_offset):bytes_count;
+        __write_block(&fh, cur_block, block_offset, write_size, buf_start, seekpos);
+        buf_start = (const char*)buf_start + INIT_BUFFER_BLOCK_SIZE - block_offset;
+        seekpos += INIT_BUFFER_BLOCK_SIZE;
+        cur_block += 1;
+        num_block -= 1;
+        remain_count -= INIT_BUFFER_BLOCK_SIZE - block_offset;
+    }
+    // printf("rank is %d, offset is %d, cur_block is %d, num_block is %d\n", rank, block_offset, cur_block, num_block);
+    // Is it alright to mix size and count here? what if the MPI_Datatype is double, whose size is not 1 as char?
+    for(int i = 0; i < num_block; i++){
+        int write_size = (int)INIT_BUFFER_BLOCK_SIZE;
+        int write_buffer_offset = 0;
+        // need to write partial of the last block
+        if(i == num_block - 1){
+            write_size = remain_count - i * INIT_BUFFER_BLOCK_SIZE;
+        }
+        __write_block(&fh, cur_block + i, write_buffer_offset, write_size, buf_start, seekpos);
+        buf_start = (const char*)buf_start + INIT_BUFFER_BLOCK_SIZE;
+        seekpos += INIT_BUFFER_BLOCK_SIZE;
+    }
+    return bytes_count / size;
 }
 
 #endif
@@ -448,7 +569,9 @@ __device__ int MPI_File_set_view(MPI_File fh, MPI_Offset disp, MPI_Datatype etyp
     // assert(etype == filetype);
 
     for(int i = 0; i < filetype.typemap_len; i++){
-        assert(etype == filetype.typemap[i].basic_type);
+        if(etype != filetype.typemap[i].basic_type){
+            return MPI_ERR_UNSUPPORTED_DATAREP;
+        }
     }
 
     int rank;
@@ -528,162 +651,99 @@ __device__ int MPI_File_get_position(MPI_File fh, MPI_Offset *offset){
 __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
     if (!(fh.amode & MPI_MODE_RDONLY) && !(fh.amode & MPI_MODE_RDWR)) return MPI_ERR_AMODE;
     if (fh.amode & MPI_MODE_SEQUENTIAL) return MPI_ERR_UNSUPPORTED_OPERATION;  // p514 l43
+
+    int rank;
+    MPI_Comm_rank(fh.comm, &rank);
+    if (datatype != fh.views[rank].etype) return MPI_ERR_UNSUPPORTED_DATAREP;
     // TODO: Only one thread with RDWR can gain access; unlimited threads with RDONLY can gain access (?)
     // TODO: write into MPI_Status
 
-    int rank;
-    MPI_Comm_rank(fh.comm, &rank);
     // If seek_pos smaller than the start of the valid area of the thread's view, then seek to the beginning
     if(fh.seek_pos[rank] < fh.views[rank].disp) {
         MPI_File_seek(fh, 0, MPI_SEEK_SET);
     }
     int cur_pos = fh.seek_pos[rank];
-    int cur_block = cur_pos / INIT_BUFFER_BLOCK_SIZE;
-    int block_offset = cur_pos % INIT_BUFFER_BLOCK_SIZE;
-    int num_block;
-    int bytes_count = count * datatype.size();
-    if(block_offset == 0){
-        if(bytes_count % INIT_BUFFER_BLOCK_SIZE == 0){
-            num_block = bytes_count / INIT_BUFFER_BLOCK_SIZE;
-        }
-        else{
-            num_block = bytes_count / INIT_BUFFER_BLOCK_SIZE + 1;
-        }
-    }
-    else{
-        int remain = bytes_count - (INIT_BUFFER_BLOCK_SIZE - block_offset);
-        if(remain < 0){
-            num_block = 1;
-        }
-        else if(remain % INIT_BUFFER_BLOCK_SIZE == 0){
-            num_block = 1 + remain / INIT_BUFFER_BLOCK_SIZE;
-        }
-        else{
-            num_block = 1 + remain / INIT_BUFFER_BLOCK_SIZE + 1;
-        }
-    }
 
-    // pointer to the buf we are writing into
-    void* buf_start = buf;
-    int remain_count = bytes_count;
-    int seekpos = cur_block * INIT_BUFFER_BLOCK_SIZE;
+    int read_size = 0;
+    MPI_File_View thread_view = fh.views[rank];
+    if(thread_view.layout_len == 1){
+        // contiguous, no gap
+        read_size = __read_buffer(fh, buf, datatype.size(), count, cur_pos);
+    }else{
+        // with gap
+        int idx = -1;
+        int read_count = 0;
+        int seek_pos = cur_pos;
+        size_t etype_size = datatype.size();
+        while(read_count < count){
+            idx++;
+            if(idx == thread_view.layout_len){
+                seek_pos += thread_view.layout[idx-1].disp + thread_view.layout[idx-1].count * etype_size + thread_view.filetype.typemap_gap;
+                idx %= thread_view.layout_len;
+            }
 
-    if(block_offset != 0){
-        int read_size = (bytes_count >= (INIT_BUFFER_BLOCK_SIZE - block_offset))?(INIT_BUFFER_BLOCK_SIZE - block_offset):bytes_count;
-        __read_block(&fh, cur_block, block_offset, read_size, buf_start, seekpos);
-        buf_start = (char*)buf_start + INIT_BUFFER_BLOCK_SIZE - block_offset;
-        seekpos += INIT_BUFFER_BLOCK_SIZE;
-        cur_block += 1;
-        num_block -= 1;
-        remain_count -= (INIT_BUFFER_BLOCK_SIZE - block_offset);
-    }
-    for(int i = 0; i < num_block; i++){
-        size_t read_size = INIT_BUFFER_BLOCK_SIZE;
-        size_t read_buffer_offset = 0;
-        // need to write partial of the last block
-        if(i == num_block - 1){
-            read_size = remain_count - i * INIT_BUFFER_BLOCK_SIZE;
+            read_size += __read_buffer(fh, (char*)buf + read_count * etype_size, etype_size, thread_view.layout[idx].count, seek_pos+thread_view.layout[idx].disp);
+            read_count += thread_view.layout[idx].count;
         }
-        __read_block(&fh, cur_block + i, read_buffer_offset, read_size, buf_start, seekpos);
-        buf_start = (char*)buf_start + INIT_BUFFER_BLOCK_SIZE;
-        seekpos += INIT_BUFFER_BLOCK_SIZE;
     }
-
     // assume we always can read count data
-    MPI_File_seek(fh, bytes_count, MPI_SEEK_CUR);
+    MPI_File_seek(fh, read_size*datatype.size(), MPI_SEEK_CUR);
     
-    return bytes_count / datatype.size();
+    return read_size;
 }
 
-__device__ unsigned int sizelock = 0;
 __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
     // TODO: check amode
-    // assert(datatype == MPI_CHAR);
-    // write into buffer
+    if (fh.amode & MPI_MODE_RDONLY) return MPI_ERR_READ_ONLY;
+    if (!(fh.amode & MPI_MODE_WRONLY) && !(fh.amode & MPI_MODE_RDWR)) return MPI_ERR_AMODE;
+
     int rank;
     MPI_Comm_rank(fh.comm, &rank);
+    if (datatype != fh.views[rank].etype) return MPI_ERR_UNSUPPORTED_DATAREP;
+    // write into buffer
     // If seek_pos smaller than the start of the valid area of the thread's view, then seek to the beginning
     if(fh.seek_pos[rank] < fh.views[rank].disp) {
         MPI_File_seek(fh, 0, MPI_SEEK_SET);
     }
     int cur_pos = fh.seek_pos[rank];
-    int cur_block = cur_pos / INIT_BUFFER_BLOCK_SIZE;
-    int block_offset = cur_pos % INIT_BUFFER_BLOCK_SIZE;
-    int num_block;
-    int bytes_count = count * datatype.size();
-    if(block_offset == 0){
-        if(bytes_count % INIT_BUFFER_BLOCK_SIZE == 0){
-            num_block = bytes_count / INIT_BUFFER_BLOCK_SIZE;
-        }
-        else{
-            num_block = bytes_count / INIT_BUFFER_BLOCK_SIZE + 1;
-        }
-    }
-    else{
-        int remain = bytes_count - (INIT_BUFFER_BLOCK_SIZE - block_offset);
-        if(remain < 0){
-            num_block = 1;
-        }
-        else if(remain % INIT_BUFFER_BLOCK_SIZE == 0){
-            num_block = 1 + remain / INIT_BUFFER_BLOCK_SIZE;
-        }
-        else{
-            num_block = 1 + remain / INIT_BUFFER_BLOCK_SIZE + 1;
-        }
-    }
 
-    // assume we can always write bytes_count, update the filesize if necessary
-    if( bytes_count + cur_pos > *(fh.filesize)){
-        mutex_lock(&sizelock);
-        *(fh.filesize) = bytes_count + cur_pos;
-        mutex_unlock(&sizelock);
-    }
+    int write_size = 0;
+    MPI_File_View thread_view = fh.views[rank];
+    if(thread_view.layout_len == 1){
+        // contiguous, no gap
+        write_size = __write_buffer(fh, buf, datatype.size(), count, cur_pos);
+    }else{
+        // with gap
+        int idx = -1;
+        int write_count = 0;
+        int seek_pos = cur_pos;
+        size_t etype_size = datatype.size();
+        while(write_count < count){
+            idx++;
+            if(idx == thread_view.layout_len){
+                seek_pos += thread_view.layout[idx-1].disp + thread_view.layout[idx-1].count * etype_size + thread_view.filetype.typemap_gap;
+                idx %= thread_view.layout_len;
+            }
 
-    // printf("rank is %d, cur_block is %d, num_block is %d\n", rank, cur_block, num_block);
-    // pointer to the buf we are reading from
-    const void* buf_start = buf;
-    int remain_count = bytes_count;
-    int seekpos = cur_block * INIT_BUFFER_BLOCK_SIZE;
-
-    // TODO: revice buffer structure, so that each block has a lock?
-    // need to write partial of the first block
-    if(block_offset != 0){
-        int write_size = (bytes_count >= (INIT_BUFFER_BLOCK_SIZE - block_offset))?(INIT_BUFFER_BLOCK_SIZE - block_offset):bytes_count;
-        __write_block(&fh, cur_block, block_offset, write_size, buf_start, seekpos);
-        buf_start = (const char*)buf_start + INIT_BUFFER_BLOCK_SIZE - block_offset;
-        seekpos += INIT_BUFFER_BLOCK_SIZE;
-        cur_block += 1;
-        num_block -= 1;
-        remain_count -= INIT_BUFFER_BLOCK_SIZE - block_offset;
-    }
-    // printf("rank is %d, offset is %d, cur_block is %d, num_block is %d\n", rank, block_offset, cur_block, num_block);
-    // Is it alright to mix size and count here? what if the MPI_Datatype is double, whose size is not 1 as char?
-    for(int i = 0; i < num_block; i++){
-        int write_size = (int)INIT_BUFFER_BLOCK_SIZE;
-        int write_buffer_offset = 0;
-        // need to write partial of the last block
-        if(i == num_block - 1){
-            write_size = remain_count - i * INIT_BUFFER_BLOCK_SIZE;
+            write_size += __write_buffer(fh, (char*)buf + write_count * etype_size, etype_size, thread_view.layout[idx].count, seek_pos+thread_view.layout[idx].disp);
+            write_count += thread_view.layout[idx].count;
         }
-        __write_block(&fh, cur_block + i, write_buffer_offset, write_size, buf_start, seekpos);
-        buf_start = (const char*)buf_start + INIT_BUFFER_BLOCK_SIZE;
-        seekpos += INIT_BUFFER_BLOCK_SIZE;
     }
     // assume we can always write count data
-    MPI_File_seek(fh, bytes_count, MPI_SEEK_CUR);
+    MPI_File_seek(fh, write_size*datatype.size(), MPI_SEEK_CUR);
 
-    return bytes_count / datatype.size();
+    return write_size;
 }
 
 # else
 
 __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
     // nb. buf is in device's address space, cannot be accessed directly by host
-
     if (!(fh.amode & MPI_MODE_RDONLY) && !(fh.amode & MPI_MODE_RDWR)) return MPI_ERR_AMODE;
     if (fh.amode & MPI_MODE_SEQUENTIAL) return MPI_ERR_UNSUPPORTED_OPERATION;  // p514 l43
     int rank;
     MPI_Comm_rank(fh.comm, &rank);
+    if (datatype != fh.views[rank].etype) return MPI_ERR_UNSUPPORTED_DATAREP;
     // TODO: Only one thread with RDWR can gain access; unlimited threads with RDONLY can gain access (?)
     // TODO: write into MPI_Status
 
@@ -738,8 +798,11 @@ __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype dat
 
 //not thread safe
 __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
+    if (fh.amode & MPI_MODE_RDONLY) return MPI_ERR_READ_ONLY;
+    if (!(fh.amode & MPI_MODE_WRONLY) && !(fh.amode & MPI_MODE_RDWR)) return MPI_ERR_AMODE;
     int rank;
     MPI_Comm_rank(fh.comm, &rank);
+    if (datatype != fh.views[rank].etype) return MPI_ERR_UNSUPPORTED_DATAREP;
     //TODO: dynamically assign buffer size
     int buffer_size = 2048;
     // int MPI_Type_size(MPI_Datatype datatype, int *size)
