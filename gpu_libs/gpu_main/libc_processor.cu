@@ -20,7 +20,7 @@ void process_gpu_libc(void* mem, size_t size) {
         if(mode_flag == I_FOPEN_MODE_RD){
             mode = "rb";
         }else if (mode_flag == I_FOPEN_MODE_RW) {
-            mode = "wb+";
+            mode = "rb+";
         }else if (mode_flag == I_FOPEN_MODE_WD) {
             mode = "wb";
         }else if (mode_flag == I_FOPEN_MODE_RW_APPEND) {
