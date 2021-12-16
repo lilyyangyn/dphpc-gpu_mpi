@@ -192,6 +192,60 @@ __device__ void __read_block(MPI_File* fh, int block_index, int start, int count
     // printf("%s", "__read_block succeed\n");     
 }
 
+__device__ int __read_buffer(MPI_File fh, void *buf, size_t size, size_t count, int pos){
+    int cur_block = pos / INIT_BUFFER_BLOCK_SIZE;
+    int block_offset = pos % INIT_BUFFER_BLOCK_SIZE;
+    int num_block;
+    int bytes_count = count * size;
+    if(block_offset == 0){
+        if(bytes_count % INIT_BUFFER_BLOCK_SIZE == 0){
+            num_block = bytes_count / INIT_BUFFER_BLOCK_SIZE;
+        }
+        else{
+            num_block = bytes_count / INIT_BUFFER_BLOCK_SIZE + 1;
+        }
+    }
+    else{
+        int remain = bytes_count - (INIT_BUFFER_BLOCK_SIZE - block_offset);
+        if(remain < 0){
+            num_block = 1;
+        }
+        else if(remain % INIT_BUFFER_BLOCK_SIZE == 0){
+            num_block = 1 + remain / INIT_BUFFER_BLOCK_SIZE;
+        }
+        else{
+            num_block = 1 + remain / INIT_BUFFER_BLOCK_SIZE + 1;
+        }
+    }
+
+    // pointer to the buf we are writing into
+    void* buf_start = buf;
+    int remain_count = bytes_count;
+    int seekpos = cur_block * INIT_BUFFER_BLOCK_SIZE;
+
+    if(block_offset != 0){
+        int read_size = (bytes_count >= (INIT_BUFFER_BLOCK_SIZE - block_offset))?(INIT_BUFFER_BLOCK_SIZE - block_offset):bytes_count;
+        __read_block(&fh, cur_block, block_offset, read_size, buf_start, seekpos);
+        buf_start = (char*)buf_start + INIT_BUFFER_BLOCK_SIZE - block_offset;
+        seekpos += INIT_BUFFER_BLOCK_SIZE;
+        cur_block += 1;
+        num_block -= 1;
+        remain_count -= (INIT_BUFFER_BLOCK_SIZE - block_offset);
+    }
+    for(int i = 0; i < num_block; i++){
+        size_t read_size = INIT_BUFFER_BLOCK_SIZE;
+        size_t read_buffer_offset = 0;
+        // need to write partial of the last block
+        if(i == num_block - 1){
+            read_size = remain_count - i * INIT_BUFFER_BLOCK_SIZE;
+        }
+        __read_block(&fh, cur_block + i, read_buffer_offset, read_size, buf_start, seekpos);
+        buf_start = (char*)buf_start + INIT_BUFFER_BLOCK_SIZE;
+        seekpos += INIT_BUFFER_BLOCK_SIZE;
+    }
+    return bytes_count / size;
+}
+
 // TODO: ask CPU to write the buffer back to disk
 __device__ void __write_file(MPI_File* fh, MPI_Datatype datatype, int block_index, int seekpos){
     // printf("file %p, buf %p, seekpos %d\n", fh->file, fh->buffer[block_index], seekpos);
@@ -249,6 +303,64 @@ __device__ void __write_block(MPI_File* fh, int block_index, int start, int coun
     fh->status[block_index] = BLOCK_IN_DIRTY;
     mutex_unlock(&fh->buffer[block_index].lock);
     // printf("%s", "__write_block succeeds\n");
+}
+
+__device__ int __write_buffer(MPI_File fh, const void *buf, size_t size, size_t count, int pos){
+    int cur_block = pos / INIT_BUFFER_BLOCK_SIZE;
+    int block_offset = pos % INIT_BUFFER_BLOCK_SIZE;
+    int num_block;
+    int bytes_count = count * size;
+    if(block_offset == 0){
+        if(bytes_count % INIT_BUFFER_BLOCK_SIZE == 0){
+            num_block = bytes_count / INIT_BUFFER_BLOCK_SIZE;
+        }
+        else{
+            num_block = bytes_count / INIT_BUFFER_BLOCK_SIZE + 1;
+        }
+    }
+    else{
+        int remain = bytes_count - (INIT_BUFFER_BLOCK_SIZE - block_offset);
+        if(remain < 0){
+            num_block = 1;
+        }
+        else if(remain % INIT_BUFFER_BLOCK_SIZE == 0){
+            num_block = 1 + remain / INIT_BUFFER_BLOCK_SIZE;
+        }
+        else{
+            num_block = 1 + remain / INIT_BUFFER_BLOCK_SIZE + 1;
+        }
+    }
+    // printf("rank is %d, cur_block is %d, num_block is %d\n", rank, cur_block, num_block);
+    // pointer to the buf we are reading from
+    const void* buf_start = buf;
+    int remain_count = bytes_count;
+    int seekpos = cur_block * INIT_BUFFER_BLOCK_SIZE;
+
+    // TODO: revice buffer structure, so that each block has a lock?
+    // need to write partial of the first block
+    if(block_offset != 0){
+        int write_size = (bytes_count >= (INIT_BUFFER_BLOCK_SIZE - block_offset))?(INIT_BUFFER_BLOCK_SIZE - block_offset):bytes_count;
+        __write_block(&fh, cur_block, block_offset, write_size, buf_start, seekpos);
+        buf_start = (const char*)buf_start + INIT_BUFFER_BLOCK_SIZE - block_offset;
+        seekpos += INIT_BUFFER_BLOCK_SIZE;
+        cur_block += 1;
+        num_block -= 1;
+        remain_count -= INIT_BUFFER_BLOCK_SIZE - block_offset;
+    }
+    // printf("rank is %d, offset is %d, cur_block is %d, num_block is %d\n", rank, block_offset, cur_block, num_block);
+    // Is it alright to mix size and count here? what if the MPI_Datatype is double, whose size is not 1 as char?
+    for(int i = 0; i < num_block; i++){
+        int write_size = (int)INIT_BUFFER_BLOCK_SIZE;
+        int write_buffer_offset = 0;
+        // need to write partial of the last block
+        if(i == num_block - 1){
+            write_size = remain_count - i * INIT_BUFFER_BLOCK_SIZE;
+        }
+        __write_block(&fh, cur_block + i, write_buffer_offset, write_size, buf_start, seekpos);
+        buf_start = (const char*)buf_start + INIT_BUFFER_BLOCK_SIZE;
+        seekpos += INIT_BUFFER_BLOCK_SIZE;
+    }
+    return bytes_count/size;
 }
 
 #endif
@@ -526,61 +638,11 @@ __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype dat
         MPI_File_seek(fh, 0, MPI_SEEK_SET);
     }
     int cur_pos = fh.seek_pos[rank];
-    int cur_block = cur_pos / INIT_BUFFER_BLOCK_SIZE;
-    int block_offset = cur_pos % INIT_BUFFER_BLOCK_SIZE;
-    int num_block;
-    int bytes_count = count * datatype.size();
-    if(block_offset == 0){
-        if(bytes_count % INIT_BUFFER_BLOCK_SIZE == 0){
-            num_block = bytes_count / INIT_BUFFER_BLOCK_SIZE;
-        }
-        else{
-            num_block = bytes_count / INIT_BUFFER_BLOCK_SIZE + 1;
-        }
-    }
-    else{
-        int remain = bytes_count - (INIT_BUFFER_BLOCK_SIZE - block_offset);
-        if(remain < 0){
-            num_block = 1;
-        }
-        else if(remain % INIT_BUFFER_BLOCK_SIZE == 0){
-            num_block = 1 + remain / INIT_BUFFER_BLOCK_SIZE;
-        }
-        else{
-            num_block = 1 + remain / INIT_BUFFER_BLOCK_SIZE + 1;
-        }
-    }
-
-    // pointer to the buf we are writing into
-    void* buf_start = buf;
-    int remain_count = bytes_count;
-    int seekpos = cur_block * INIT_BUFFER_BLOCK_SIZE;
-
-    if(block_offset != 0){
-        int read_size = (bytes_count >= (INIT_BUFFER_BLOCK_SIZE - block_offset))?(INIT_BUFFER_BLOCK_SIZE - block_offset):bytes_count;
-        __read_block(&fh, cur_block, block_offset, read_size, buf_start, seekpos);
-        buf_start = (char*)buf_start + INIT_BUFFER_BLOCK_SIZE - block_offset;
-        seekpos += INIT_BUFFER_BLOCK_SIZE;
-        cur_block += 1;
-        num_block -= 1;
-        remain_count -= (INIT_BUFFER_BLOCK_SIZE - block_offset);
-    }
-    for(int i = 0; i < num_block; i++){
-        size_t read_size = INIT_BUFFER_BLOCK_SIZE;
-        size_t read_buffer_offset = 0;
-        // need to write partial of the last block
-        if(i == num_block - 1){
-            read_size = remain_count - i * INIT_BUFFER_BLOCK_SIZE;
-        }
-        __read_block(&fh, cur_block + i, read_buffer_offset, read_size, buf_start, seekpos);
-        buf_start = (char*)buf_start + INIT_BUFFER_BLOCK_SIZE;
-        seekpos += INIT_BUFFER_BLOCK_SIZE;
-    }
-
+    int read_count = __read_buffer(fh, buf, datatype.size(), count, cur_pos);
     // assume we always can read count data
-    MPI_File_seek(fh, bytes_count, MPI_SEEK_CUR);
+    MPI_File_seek(fh, read_count*datatype.size(), MPI_SEEK_CUR);
     
-    return bytes_count / datatype.size();
+    return read_count;
 }
 
 __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
@@ -594,64 +656,11 @@ __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datat
         MPI_File_seek(fh, 0, MPI_SEEK_SET);
     }
     int cur_pos = fh.seek_pos[rank];
-    int cur_block = cur_pos / INIT_BUFFER_BLOCK_SIZE;
-    int block_offset = cur_pos % INIT_BUFFER_BLOCK_SIZE;
-    int num_block;
-    int bytes_count = count * datatype.size();
-    if(block_offset == 0){
-        if(bytes_count % INIT_BUFFER_BLOCK_SIZE == 0){
-            num_block = bytes_count / INIT_BUFFER_BLOCK_SIZE;
-        }
-        else{
-            num_block = bytes_count / INIT_BUFFER_BLOCK_SIZE + 1;
-        }
-    }
-    else{
-        int remain = bytes_count - (INIT_BUFFER_BLOCK_SIZE - block_offset);
-        if(remain < 0){
-            num_block = 1;
-        }
-        else if(remain % INIT_BUFFER_BLOCK_SIZE == 0){
-            num_block = 1 + remain / INIT_BUFFER_BLOCK_SIZE;
-        }
-        else{
-            num_block = 1 + remain / INIT_BUFFER_BLOCK_SIZE + 1;
-        }
-    }
-    // printf("rank is %d, cur_block is %d, num_block is %d\n", rank, cur_block, num_block);
-    // pointer to the buf we are reading from
-    const void* buf_start = buf;
-    int remain_count = bytes_count;
-    int seekpos = cur_block * INIT_BUFFER_BLOCK_SIZE;
-
-    // TODO: revice buffer structure, so that each block has a lock?
-    // need to write partial of the first block
-    if(block_offset != 0){
-        int write_size = (bytes_count >= (INIT_BUFFER_BLOCK_SIZE - block_offset))?(INIT_BUFFER_BLOCK_SIZE - block_offset):bytes_count;
-        __write_block(&fh, cur_block, block_offset, write_size, buf_start, seekpos);
-        buf_start = (const char*)buf_start + INIT_BUFFER_BLOCK_SIZE - block_offset;
-        seekpos += INIT_BUFFER_BLOCK_SIZE;
-        cur_block += 1;
-        num_block -= 1;
-        remain_count -= INIT_BUFFER_BLOCK_SIZE - block_offset;
-    }
-    // printf("rank is %d, offset is %d, cur_block is %d, num_block is %d\n", rank, block_offset, cur_block, num_block);
-    // Is it alright to mix size and count here? what if the MPI_Datatype is double, whose size is not 1 as char?
-    for(int i = 0; i < num_block; i++){
-        int write_size = (int)INIT_BUFFER_BLOCK_SIZE;
-        int write_buffer_offset = 0;
-        // need to write partial of the last block
-        if(i == num_block - 1){
-            write_size = remain_count - i * INIT_BUFFER_BLOCK_SIZE;
-        }
-        __write_block(&fh, cur_block + i, write_buffer_offset, write_size, buf_start, seekpos);
-        buf_start = (const char*)buf_start + INIT_BUFFER_BLOCK_SIZE;
-        seekpos += INIT_BUFFER_BLOCK_SIZE;
-    }
+    int write_count = __write_buffer(fh, buf, datatype.size(), count, cur_pos);
     // assume we can always write count data
-    MPI_File_seek(fh, bytes_count, MPI_SEEK_CUR);
+    MPI_File_seek(fh, write_count*datatype.size(), MPI_SEEK_CUR);
 
-    return bytes_count / datatype.size();
+    return write_count;
 }
 
 # else
