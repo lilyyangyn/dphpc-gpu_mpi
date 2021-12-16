@@ -20,7 +20,6 @@
 #define MPI_MODE_SEQUENTIAL             128
 #define MPI_MODE_APPEND                 256
 
-
 /**
  * error code
  * see documentation p556 table 13.3
@@ -156,7 +155,7 @@ struct MPI_File{
 
     BufBlock*       buffer; // points to the buffer of the file blocks
     int*            status; // status of each block: NOT_IN/ CLEAN/ DIRTY
-    int*            num_blocks;   // number of blocks
+    int*            num_blocks; // number of blocks
 
     MPI_File_View*  views;
 
