@@ -598,7 +598,9 @@ __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype dat
 __device__ unsigned int sizelock = 0;
 __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
     // TODO: check amode
-    // assert(datatype == MPI_CHAR);
+    if (fh.amode & MPI_MODE_RDONLY) return MPI_ERR_READ_ONLY;
+    if (!(fh.amode & MPI_MODE_WRONLY) && !(fh.amode & MPI_MODE_RDWR)) return MPI_ERR_AMODE;
+
     // write into buffer
     int rank;
     MPI_Comm_rank(fh.comm, &rank);
