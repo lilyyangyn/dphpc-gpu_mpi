@@ -569,7 +569,9 @@ __device__ int MPI_File_set_view(MPI_File fh, MPI_Offset disp, MPI_Datatype etyp
     // assert(etype == filetype);
 
     for(int i = 0; i < filetype.typemap_len; i++){
-        assert(etype == filetype.typemap[i].basic_type);
+        if(etype != filetype.typemap[i].basic_type){
+            return MPI_ERR_UNSUPPORTED_DATAREP;
+        }
     }
 
     int rank;
@@ -649,11 +651,13 @@ __device__ int MPI_File_get_position(MPI_File fh, MPI_Offset *offset){
 __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
     if (!(fh.amode & MPI_MODE_RDONLY) && !(fh.amode & MPI_MODE_RDWR)) return MPI_ERR_AMODE;
     if (fh.amode & MPI_MODE_SEQUENTIAL) return MPI_ERR_UNSUPPORTED_OPERATION;  // p514 l43
-    // TODO: Only one thread with RDWR can gain access; unlimited threads with RDONLY can gain access (?)
-    // TODO: write into MPI_Status
 
     int rank;
     MPI_Comm_rank(fh.comm, &rank);
+    if (datatype != fh.views[rank].etype) return MPI_ERR_UNSUPPORTED_DATAREP;
+    // TODO: Only one thread with RDWR can gain access; unlimited threads with RDONLY can gain access (?)
+    // TODO: write into MPI_Status
+
     // If seek_pos smaller than the start of the valid area of the thread's view, then seek to the beginning
     if(fh.seek_pos[rank] < fh.views[rank].disp) {
         MPI_File_seek(fh, 0, MPI_SEEK_SET);
@@ -671,9 +675,10 @@ __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datat
     if (fh.amode & MPI_MODE_RDONLY) return MPI_ERR_READ_ONLY;
     if (!(fh.amode & MPI_MODE_WRONLY) && !(fh.amode & MPI_MODE_RDWR)) return MPI_ERR_AMODE;
 
-    // write into buffer
     int rank;
     MPI_Comm_rank(fh.comm, &rank);
+    if (datatype != fh.views[rank].etype) return MPI_ERR_UNSUPPORTED_DATAREP;
+    // write into buffer
     // If seek_pos smaller than the start of the valid area of the thread's view, then seek to the beginning
     if(fh.seek_pos[rank] < fh.views[rank].disp) {
         MPI_File_seek(fh, 0, MPI_SEEK_SET);
@@ -690,11 +695,11 @@ __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datat
 
 __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
     // nb. buf is in device's address space, cannot be accessed directly by host
-
     if (!(fh.amode & MPI_MODE_RDONLY) && !(fh.amode & MPI_MODE_RDWR)) return MPI_ERR_AMODE;
     if (fh.amode & MPI_MODE_SEQUENTIAL) return MPI_ERR_UNSUPPORTED_OPERATION;  // p514 l43
     int rank;
     MPI_Comm_rank(fh.comm, &rank);
+    if (datatype != fh.views[rank].etype) return MPI_ERR_UNSUPPORTED_DATAREP;
     // TODO: Only one thread with RDWR can gain access; unlimited threads with RDONLY can gain access (?)
     // TODO: write into MPI_Status
 
@@ -749,8 +754,11 @@ __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype dat
 
 //not thread safe
 __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
+    if (fh.amode & MPI_MODE_RDONLY) return MPI_ERR_READ_ONLY;
+    if (!(fh.amode & MPI_MODE_WRONLY) && !(fh.amode & MPI_MODE_RDWR)) return MPI_ERR_AMODE;
     int rank;
     MPI_Comm_rank(fh.comm, &rank);
+    if (datatype != fh.views[rank].etype) return MPI_ERR_UNSUPPORTED_DATAREP;
     //TODO: dynamically assign buffer size
     int buffer_size = 2048;
     // int MPI_Type_size(MPI_Datatype datatype, int *size)
