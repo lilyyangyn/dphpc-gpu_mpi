@@ -15,22 +15,35 @@ void set_i_ready_flag(void* mem){
 void process_gpu_libc(void* mem, size_t size) {
 
     if(get_i_flag(mem) == I_FOPEN){
-        int mode_flag = ((int*)mem)[1];
-        const char* mode;
-        if(mode_flag == I_FOPEN_MODE_RD){
-            mode = "rb";
-        }else if (mode_flag == I_FOPEN_MODE_RW) {
-            mode = "rb+";
-        }else if (mode_flag == I_FOPEN_MODE_WD) {
-            mode = "wb";
-        }else if (mode_flag == I_FOPEN_MODE_RW_APPEND) {
-            mode = "ab+";
-        }else if (mode_flag == I_FOPEN_MODE_WD_APPEND) {
-            mode = "ab";
-        }
+        int amode = ((int*)mem)[1];
         const char* filename = (const char*)((const char**)mem + 2);
-        FILE* file = fopen(filename, mode);
-        ((FILE**)mem)[1] = file;
+        FILE* file = fopen(filename, "rb");
+        int file_exist = 1;
+        if(file == NULL){
+            file_exist = 0;
+        }
+        if(!(amode & MPI_MODE_RDONLY)){
+            if(file_exist == 1) fclose(file);
+            if(amode & MPI_MODE_RDWR){
+                if(amode & MPI_MODE_APPEND) {
+                    file = fopen(filename, "ab+");
+                }else{
+                    if(file_exist == 0){
+                        file = fopen(filename, "wb");
+                        fclose(file);
+                    }
+                    file = fopen(filename, "rb+");
+                }
+            }else if(amode & MPI_MODE_WRONLY){
+                if(amode & MPI_MODE_APPEND) {
+                    file = fopen(filename, "ab");
+                }else{
+                    file = fopen(filename, "wb");
+                }
+            }
+        }
+        ((int*)mem)[1] = file_exist;
+        ((FILE**)mem)[2] = file;
         set_i_ready_flag(mem);
     }
 

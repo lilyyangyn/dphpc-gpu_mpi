@@ -82,14 +82,14 @@ __device__ int __file_pos_to_view_pos(MPI_File_View view, int position){
     return typemap_idx * view.filetype.typemap_len + typemap_offset_idx;
 }
 
-__device__ FILE* __open_file(const char* filename, int mode){
+__device__ FILE* __open_file(const char* filename, int amode, int* file_exist){
     if(filename == NULL){
         return nullptr;
     }
     int buffer_size = 128;
     char* data = (char*) allocate_host_mem(buffer_size);
     ((int*)data)[0] = I_FOPEN;
-    ((int*)data)[1] = mode;
+    ((int*)data)[1] = amode;
 
     int filename_size = 0;
     while (filename[filename_size] != '\0') filename_size++;
@@ -99,8 +99,10 @@ __device__ FILE* __open_file(const char* filename, int mode){
     // wait
     while(((int*)data)[0] != I_READY){};
     
-    FILE* file = ((FILE**)data)[1];
+    *file_exist = ((int*)data)[1];
+    FILE* file = ((FILE**)data)[2];
     free_host_mem(data);
+
     return file;
 }
 
@@ -284,43 +286,14 @@ __device__ int MPI_File_open(MPI_Comm comm, const char *filename, int amode, MPI
             shared_fh.filename = filename;
 
             // initialize fh->file
-            shared_fh.file = __open_file(filename, I_FOPEN_MODE_RD);
+            int file_exist;
+            shared_fh.file = __open_file(filename, amode, &file_exist);
             // check file existence
-            if(shared_fh.file == NULL){
-                if(amode & MPI_MODE_RDONLY){
-                    err_code = MPI_ERR_NO_SUCH_FILE;
-                }
-                if(!(amode & MPI_MODE_CREATE)){
-                    err_code = MPI_ERR_NO_SUCH_FILE;
-                }
-            }
-            if(((amode & MPI_MODE_CREATE) || (amode & MPI_MODE_EXCL)) && (amode & MPI_MODE_RDONLY)){
-                // see documentation p495 line 8
-                err_code = MPI_ERR_AMODE;
+            if(!(amode & MPI_MODE_CREATE) && (file_exist == 0)){
+                err_code = MPI_ERR_NO_SUCH_FILE;
             }
 
-            if(err_code != 0) {
-                __close_file(shared_fh.file);
-            }else{
-                if(!(amode & MPI_MODE_RDONLY)){
-                    __close_file(shared_fh.file);
-                    int mode;
-                    if(amode & MPI_MODE_RDWR){
-                        if(amode & MPI_MODE_APPEND) {
-                            mode = I_FOPEN_MODE_RW_APPEND;
-                        }else{
-                            mode = I_FOPEN_MODE_RW;
-                        }
-                    }else if(amode & MPI_MODE_WRONLY){
-                        if(amode & MPI_MODE_APPEND) {
-                            mode = I_FOPEN_MODE_WD_APPEND;
-                        }else{
-                            mode = I_FOPEN_MODE_WD;
-                        }
-                    }
-                    shared_fh.file = __open_file(filename, mode);
-                }
-                
+            if(err_code == MPI_SUCCESS) {
                 // initialize fh->seek_pos
                 // TODO: MPI_MODE_UNIQUE_OPEN -> Only one seek_pos???
                 int size;
@@ -381,8 +354,9 @@ __device__ int MPI_File_delete(const char *filename, MPI_Info info){
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     if(rank == 0){
-        FILE* file = __open_file(filename, I_FOPEN_MODE_RD);
-        if(file == NULL){
+        int file_exist;
+        FILE* file = __open_file(filename, MPI_MODE_RDONLY, &file_exist);
+        if(file_exist == 0){
             return MPI_ERR_NO_SUCH_FILE;
         }
         int res = __delete_file(filename);
