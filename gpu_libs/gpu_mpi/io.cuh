@@ -95,9 +95,11 @@ struct MPI_File_View{
     MPI_Datatype    filetype;
     const char*     datarep;
     int             layout_len;
+    int             layout_cur_idx;
+    int             layout_cur_disp;
     layout_segment  layout[TYPEMAP_MAXLEN];
     __device__ MPI_File_View(MPI_Offset disp, MPI_Datatype etype, MPI_Datatype filetype, const char* datarep)
-    :disp(disp),etype(etype),filetype(filetype),datarep(datarep){
+    :disp(disp),etype(etype),filetype(filetype),datarep(datarep),layout_cur_idx(0),layout_cur_disp(0){
         // assume all basic_types in filetype are the same to etype
         layout_len = 1;
         int filetype_disp = filetype.typemap[0].disp;
@@ -137,6 +139,9 @@ struct MPI_File_View{
         }
     }
     __device__ MPI_File_View(){}
+    __device__ bool isBegin(){
+        return layout_cur_disp == 0 && layout_cur_idx == 0;
+    }
 };
 
 struct MPI_File{

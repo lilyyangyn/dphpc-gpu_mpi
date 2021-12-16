@@ -73,10 +73,10 @@ struct FileViewSetter {
     }
 };
 
-// TEST_CASE("FileViewSetter", "[FileViewSetter]") {
-//     TestRunner testRunner(1);
-//     testRunner.run<FileViewSetter>();
-// }
+TEST_CASE("FileViewSetter", "[FileViewSetter]") {
+    TestRunner testRunner(1);
+    testRunner.run<FileViewSetter>();
+}
 
 struct FileViewRWSimple {
     static __device__ void run(bool& ok) {
@@ -89,19 +89,13 @@ struct FileViewRWSimple {
         int N = 10;
         MPI_Init(0, 0);
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-        // etype = MPI_CHAR;
         etype = MPI_INT;
         arraytype = etype;
-        disp = rank*plainTypeSize(etype)*N; 
+        disp = rank*etype.size()*N; 
         const char* datarep = "native";
 
-        // char* wbuf = (char *)malloc(N*plainTypeSize(etype));
-        // char* rbuf = (char *)malloc(N*plainTypeSize(etype));
-        // for (int i=0;i<N;i++){
-        //     wbuf[i]=('0' + rank);
-        // }
-        int* wbuf = (int *)malloc(N*plainTypeSize(etype));
-        int* rbuf = (int *)malloc(N*plainTypeSize(etype));
+        int* wbuf = (int *)malloc(N*etype.size());
+        int* rbuf = (int *)malloc(N*etype.size());
         for (int i=0;i<N;i++){
             wbuf[i]=rank;
         }
@@ -109,20 +103,21 @@ struct FileViewRWSimple {
         MPI_File_open(MPI_COMM_WORLD, "viewwrite.txt", MPI_MODE_RDWR | MPI_MODE_CREATE, info, &fh);
         MPI_File_set_view(fh, disp, etype, arraytype, datarep, info);
 
+        MPI_File_seek(fh, 0, MPI_SEEK_SET);
         MPI_File_write(fh, wbuf, N, etype, nullptr);
+        MPI_Barrier(MPI_COMM_WORLD);
+        MPI_File_seek(fh, 0, MPI_SEEK_SET);
         MPI_File_read(fh, rbuf, N, etype, nullptr);
-
-        // int wbuf = rank;
-        // int rbuf = -1;
-        // MPI_File_write(fh, &wbuf, 1, etype, nullptr);
-        // MPI_File_read(fh, &rbuf, 1, etype, nullptr);
 
         MPI_File_close(&fh);
 
-        // printf("write: %d, read: %d\n", wbuf, rbuf);
-
-        ok = *wbuf==*rbuf;
-        // ok = wbuf==rbuf;
+        for (int i=0;i<N;i++){
+            printf("rank: %d, w: %d, r: %d\n", rank, wbuf[i], rbuf[i]);
+            ok = wbuf[i]==rbuf[i];
+            if (ok == false){
+                break;
+            }
+        }
 
         free(wbuf);
         free(rbuf);
@@ -131,10 +126,10 @@ struct FileViewRWSimple {
     }
 };
 
-// TEST_CASE("FileViewRWSimple", "[FileViewRWSimple]") {
-//     TestRunner testRunner(2);
-//     testRunner.run<FileViewRWSimple>();
-// }
+TEST_CASE("FileViewRWSimple", "[FileViewRWSimple]") {
+    TestRunner testRunner(2);
+    testRunner.run<FileViewRWSimple>();
+}
 
 struct FileViewRWContiguous {
     static __device__ void run(bool& ok) {
@@ -176,7 +171,7 @@ struct FileViewRWContiguous {
 
         // ok = *wbuf==*rbuf;
         for (int i=0;i<N;i++){
-            printf("rank: %d, w: %c, r: %c\n", rank, wbuf[i], rbuf[i]);
+            // printf("rank: %d, w: %c, r: %c\n", rank, wbuf[i], rbuf[i]);
             ok = wbuf[i]==rbuf[i];
             if (ok == false){
                 break;
@@ -190,10 +185,10 @@ struct FileViewRWContiguous {
     }
 };
 
-// TEST_CASE("FileViewRWContiguous", "[FileViewRWContiguous]") {
-//     TestRunner testRunner(2);
-//     testRunner.run<FileViewRWContiguous>();
-// }
+TEST_CASE("FileViewRWContiguous", "[FileViewRWContiguous]") {
+    TestRunner testRunner(2);
+    testRunner.run<FileViewRWContiguous>();
+}
 
 struct FileViewRWVector {
     static __device__ void run(bool& ok) {
@@ -222,9 +217,9 @@ struct FileViewRWVector {
         disp = rank*etype.size()*NW; 
         const char* datarep = "native";
 
-        char* wbuf = (char *)malloc((npes+1)*NW*etype.size());
-        char* rbuf = (char *)malloc((npes+1)*NW*etype.size());
-        for (int i=0;i<(npes+1)*NW;i++){
+        char* wbuf = (char *)malloc(3*NW*etype.size());
+        char* rbuf = (char *)malloc(3*NW*etype.size());
+        for (int i=0;i<3*NW;i++){
             wbuf[i]=('0' + rank);
             rbuf[i]='?';
         }
@@ -237,17 +232,17 @@ struct FileViewRWVector {
         // printf("SEEK POS BEFORE: %d, rank, %d\n", fh.seek_pos[rank], rank);
         MPI_File_seek(fh, 0, MPI_SEEK_SET);
         // printf("SEEK POS AFTER: %d, rank, %d\n", fh.seek_pos[rank], rank);
-        MPI_File_write(fh, wbuf, NW*(npes+1), my_etype, nullptr);
+        MPI_File_write(fh, wbuf, NW*3, my_etype, nullptr);
 
         MPI_Barrier(MPI_COMM_WORLD);
 
         MPI_File_seek(fh, 0, MPI_SEEK_SET);
-        MPI_File_read(fh, rbuf, NW*(npes+1), my_etype, nullptr);
+        MPI_File_read(fh, rbuf, NW*3, my_etype, nullptr);
 
         MPI_File_close(&fh);
 
         // ok = *wbuf==*rbuf;
-        for (int i=0;i<(npes+1)*NW;i++){
+        for (int i=0;i<3*NW;i++){
             // printf("rank: %d, i: %d, w: %c, r: %c\n", rank, i, wbuf[i], rbuf[i]);
             ok = wbuf[i]==rbuf[i];
             if (ok == false){
@@ -265,4 +260,77 @@ struct FileViewRWVector {
 TEST_CASE("FileViewRWVector", "[FileViewRWVector]") {
     TestRunner testRunner(4);
     testRunner.run<FileViewRWVector>();
+}
+
+struct FileViewRWAnyPlace {
+    static __device__ void run(bool& ok) {
+        MPI_Datatype arraytype;
+        MPI_Datatype etype;
+        MPI_Datatype my_etype;
+        MPI_Offset disp;
+        MPI_File fh;
+        MPI_Info info;
+        int rank;
+        int NW = 5;
+        MPI_Init(0, 0);
+        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+        etype = MPI_CHAR;
+        my_etype = MPI_CHAR;
+
+        int npes; 
+        MPI_Comm_size(MPI_COMM_WORLD, &npes);
+        MPI_Type_vector(2, NW, NW*npes, etype, &arraytype);
+        MPI_Type_commit(&arraytype);
+
+        disp = rank*etype.size()*NW; 
+        const char* datarep = "native";
+
+        char* wbuf = (char *)malloc(3*NW*etype.size());
+        char* rbuf = (char *)malloc(3*NW*etype.size());
+        for (int i=0;i<3*NW;i++){
+            wbuf[i]=('0' + rank);
+            rbuf[i]='?';
+        }
+        // printf("filetype size: %d\n", arraytype.size());
+
+        int first_round = NW*2 - 2;
+        int second_round = NW + 2;
+        
+        MPI_File_open(MPI_COMM_WORLD, "viewanyplace.txt", MPI_MODE_RDWR | MPI_MODE_CREATE, info, &fh);
+        MPI_File_set_view(fh, disp, etype, arraytype, datarep, info);
+        // printf("-- SET VIEW -- disp: %d, file_disp: %d, rank, %d\n", disp, fh.views[rank].disp, rank);
+
+        // printf("SEEK POS BEFORE: %d, rank, %d\n", fh.seek_pos[rank], rank);
+        MPI_File_seek(fh, 0, MPI_SEEK_SET);
+        // printf("SEEK POS AFTER: %d, rank, %d\n", fh.seek_pos[rank], rank);
+        MPI_File_write(fh, wbuf, first_round, my_etype, nullptr);
+        MPI_File_write(fh, &wbuf[first_round], second_round, my_etype, nullptr);
+
+        MPI_Barrier(MPI_COMM_WORLD);
+
+        MPI_File_seek(fh, 0, MPI_SEEK_SET);
+        MPI_File_read(fh, rbuf, first_round, my_etype, nullptr);
+        MPI_File_read(fh, &rbuf[first_round], second_round, my_etype, nullptr);
+
+        MPI_File_close(&fh);
+
+        // ok = *wbuf==*rbuf;
+        for (int i=0;i<3*NW;i++){
+            // printf("rank: %d, i: %d, w: %c, r: %c\n", rank, i, wbuf[i], rbuf[i]);
+            ok = wbuf[i]==rbuf[i];
+            if (ok == false){
+                break;
+            }
+        }
+
+        free(wbuf);
+        free(rbuf);
+
+        MPI_Finalize();
+    }
+};
+
+TEST_CASE("FileViewRWAnyPlace", "[FileViewRWAnyPlace]") {
+    TestRunner testRunner(2);
+    testRunner.run<FileViewRWAnyPlace>();
 }
