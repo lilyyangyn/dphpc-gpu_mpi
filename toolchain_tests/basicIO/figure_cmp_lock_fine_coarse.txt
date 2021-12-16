@@ -1,0 +1,21 @@
+
+write with fine lock(lock per block)
+num of proc 1, the average time of write is: 0.030480
+num of proc 2, the average time of write is: 0.030921
+num of proc 4, the average time of write is: 0.031620
+num of proc 8, the average time of write is: 0.033688
+num of proc 16, the average time of write is: 0.046645
+num of proc 32, the average time of write is: 0.082728
+num of proc 64, the average time of write is: 0.196097
+num of proc 128, the average time of write is: 0.897924
+(remember: Max active blocks per multiprocessor 32 (for 1 thread(s) per block))
+
+write with coarse lock(whole write)
+num of proc 1, the average time of write is: 0.031004
+num of proc 2, the average time of write is: 0.060862
+num of proc 4, the average time of write is: 0.114594
+num of proc 8, the average time of write is: 0.254438
+num of proc 16, the average time of write is: 0.813761
+num of proc 32, the average time of write is: 2.981344
+num of proc 64, the average time of write is: 10.103733
+num of proc 128, the average time of write is: 16.809778

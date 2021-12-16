@@ -1,0 +1,85 @@
+
+with optimized allocate:
+write without faster, 4 threads, 100 times, write = 32768 bytes, [32768*rank, 32768*rank + 32767]
+
+64: the average time of write is: 0.673309
+128: the average time of write is: 0.618351
+256: the average time of write is: 0.608442
+512: the average time of write is: 0.600863
+1024: the average time of write is: 0.599328
+2048: the average time of write is: 0.595798
+4096: the average time of write is: 0.594097
+8192: the average time of write is: 0.596950
+16384: the average time of write is: 0.597734
+32768: the average time of write is: 0.597920
+
+with optimized allocate:
+write without faster, 4 threads, 100 times, write = 4096 bytes, [4096*rank, 4096*rank + 4096]
+
+64: the average time of write is: 0.070047
+128: the average time of write is: 0.065313
+256: the average time of write is: 0.063481
+512: the average time of write is: 0.063121
+1024: the average time of write is: 0.062709
+2048: the average time of write is: 0.062636
+4096: the average time of write is: 0.062177
+8102: the average time of write is: 0.147334
+16384: the average time of write is: 0.268021
+32768: the average time of write is: 0.271549
+
+with optimized allocate:
+write without faster, 4 threads, 100 times, write = 256 bytes, [256*rank, 256*rank + 255]
+64: the average time of write is: 0.004532
+128: the average time of write is: 0.004488
+256: the average time of write is: 0.004421
+512: the average time of write is: 0.010344
+1024: the average time of write is: 0.017140
+2048: the average time of write is: 0.016833
+4096: the average time of write is: 0.017397
+8192: the average time of write is: 0.018413
+16384: the average time of write is: 0.017652
+32768: the average time of write is: 0.017158
+
+
+without optimized allocate:
+write without faster, 4 threads, 100 times, write = 32768 bytes, [32768*rank, 32768*rank + 32767]
+64: the average time of write is: 15.140762
+128: the average time of write is: 3.963076
+256: the average time of write is: 1.267378
+512: the average time of write is: 0.778280
+1024: the average time of write is: 0.650170
+2048: the average time of write is: 0.607336
+4096: the average time of write is: 0.597262
+8192: the average time of write is: 0.595771
+16384: the average time of write is: 0.592594
+32768: the average time of write is: 0.590093
+
+
+
+without optimized allocate:
+write without faster, 4 threads, 100 times, write = 4096 bytes, [4096*rank, 4096*rank + 4095]
+64: the average time of write is: 0.254179
+128: the average time of write is: 0.114752
+256: the average time of write is: 0.080838
+512: the average time of write is: 0.066518
+1024: the average time of write is: 0.063062
+2048: the average time of write is: 0.063137
+4096: the average time of write is: 0.062163
+8192: the average time of write is: 0.147970
+16384: the average time of write is: 0.258881
+32768: the average time of write is: 0.268266
+
+
+
+without optimized allocate:
+write without faster, 4 threads, 100 times, write = 256 bytes, [256*rank, 256*rank + 255]
+64: the average time of write is: 0.005438 
+128: the average time of write is: 0.004474
+256: the average time of write is: 0.004370
+512: the average time of write is: 0.010952
+1024: the average time of write is: 0.017695
+2048: the average time of write is: 0.017560
+4096: the average time of write is: 0.017548
+8192: the average time of write is: 0.017129
+16384: the average time of write is: 0.017055
+32768: the average time of write is: 0.017057
