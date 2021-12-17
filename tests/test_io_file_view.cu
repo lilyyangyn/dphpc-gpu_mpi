@@ -112,7 +112,7 @@ struct FileViewRWSimple {
         MPI_File_close(&fh);
 
         for (int i=0;i<N;i++){
-            printf("rank: %d, w: %d, r: %d\n", rank, wbuf[i], rbuf[i]);
+            // printf("rank: %d, w: %d, r: %d\n", rank, wbuf[i], rbuf[i]);
             ok = wbuf[i]==rbuf[i];
             if (ok == false){
                 break;

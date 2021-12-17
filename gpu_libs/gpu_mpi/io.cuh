@@ -178,11 +178,13 @@ struct __rw_params {
     int             seek_pos;
     int             layout_count;
     int             layout_gap;
+    int             layout_cur_idx;
+    int             layout_cur_disp;
     layout_segment* layout; 
     // __device__ __rw_params(int a,FILE* f, MPI_Datatype d, void*b, int c, int s)
     // :acttype(a),file(f),datatype(d),buf(b),count(c),seek_pos(s){}
-    __device__ __rw_params(int a,FILE* f, int d, void*b, int c, int s, int lc, int g, layout_segment* l)
-    :acttype(a),file(f),etype_size(d),buf(b),count(c),seek_pos(s), layout_count(lc), layout_gap(g), layout(l){}
+    __device__ __rw_params(int a,FILE* f, int d, void*b, int c, int s, int lc, int g, int lidx, int ldisp, layout_segment* l)
+    :acttype(a),file(f),etype_size(d),buf(b),count(c),seek_pos(s), layout_count(lc), layout_gap(g), layout_cur_idx(lidx), layout_cur_disp(ldisp), layout(l){}
 };
 
 /* ------FILE MANIPULATION------ */
