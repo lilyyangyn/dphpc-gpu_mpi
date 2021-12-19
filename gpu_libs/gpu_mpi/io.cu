@@ -374,6 +374,7 @@ __device__ int __write_buffer(MPI_File fh, const void *buf, size_t size, size_t 
 
 #endif
 
+
 /* ------FILE MANIPULATION------ */
 
 __device__ MPI_File shared_fh;

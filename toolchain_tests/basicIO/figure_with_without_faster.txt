@@ -1,0 +1,27 @@
+data after optimizing allocate:
+
+block size 2048, all threads write block 0 for 100 times:
+
+without faster:
+1 thread: the average time of write is: 0.036454
+2 threads: the average time of write is: 0.037079
+4 threads: the average time of write is: 0.037608
+8 threads: the average time of write is: 0.045627
+16 threads: the average time of write is: 0.046011
+32 threads: the average time of write is: 0.060751
+64 threads: the average time of write is: 0.119484
+128 threads: the average time of write is: 0.205298
+150: the average time of write is: 0.301607
+192: the average time of write is: 0.389655
+
+with faster:
+1: the average time of write is: 0.036657
+2: the average time of write is: 0.037546
+4: the average time of write is: 0.038286
+8: the average time of write is: 0.038785
+16: the average time of write is: 0.049123
+32: the average time of write is: 0.068180
+64: the average time of write is: 0.115682
+128: the average time of write is: 0.191916
+150: the average time of write is: 0.357276
+192: the average time of write is: 0.363722

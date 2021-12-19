@@ -1,0 +1,57 @@
+read with buffer
+
+1: the average time of write is: 0.001183
+2: the average time of write is: 0.001831
+4: the average time of write is: 0.002541
+8: the average time of write is: 0.003961
+16: the average time of write is: 0.006793
+32: the average time of write is: 0.012454
+64: the average time of write is: 0.024130
+128: the average time of write is: 0.046422
+256: the average time of write is: 0.091888
+512: the average time of write is: 0.182738
+1024: the average time of write is: 0.363624
+
+
+write with buffer
+
+1: the average time of write is: 0.000372
+2: the average time of write is: 0.000641
+4: the average time of write is: 0.001479
+8: the average time of write is: 0.002947
+16: the average time of write is: 0.006328
+32: the average time of write is: 0.012216
+64: the average time of write is: 0.024784
+128: the average time of write is: 0.051418
+256: the average time of write is: 0.110094
+512: the average time of write is: 0.244646
+1024: the average time of write is: 0.536853
+
+
+read naive
+1: the average time of write is: 0.001962
+2: the average time of write is: 0.002396
+4: the average time of write is: 0.004903
+8: the average time of write is: 0.011105
+16: the average time of write is: 0.023325
+32: the average time of write is: 0.049326
+64: the average time of write is: 0.103083
+128: the average time of write is: 0.210329
+256: the average time of write is: 0.463541
+512: the average time of write is: 0.896182
+1024: the average time of write is: 1.801172
+
+
+write naive
+
+1: the average time of write is: 0.001124
+2: the average time of write is: 0.002297
+4: the average time of write is: 0.006984
+8: the average time of write is: 0.009674
+16: the average time of write is: 0.019670
+32: the average time of write is: 0.039143
+64: the average time of write is: 0.083847
+128: the average time of write is: 0.196884
+256: the average time of write is: 0.411606
+512: the average time of write is: 0.880283
+1024: the average time of write is: 1.749203

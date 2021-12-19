@@ -1,0 +1,22 @@
+write different blocks, 100 times, write different blocks, block size = 2048, without faster, write [rank*4096, rank*4096 + 4095]
+
+with allocate optimizations:
+1 threads: the average time of write is: 0.077705
+2: the average time of write is: 0.084255
+4: the average time of write is: 0.103716
+8: the average time of write is: 0.157744
+16: the average time of write is: 0.277473
+32: the average time of write is: 0.817256
+64: the average time of write is: 2.226540
+128: the average time of write is: 7.310189
+
+
+without allocate optimizations:
+1 threads: the average time of write is: 0.078931
+2: the average time of write is: 0.095035
+4: the average time of write is: 0.118210
+8: the average time of write is: 0.437654
+16: the average time of write is: 2.624191
+32: the average time of write is: 13.363895
+64: the average time of write is: 60.349990
+128: the average time of write is: 264.711650
