@@ -9,6 +9,7 @@
  * version switch
  */
 #define USE_BUFFER true
+#define USE_VIEW_LAYOUT true
 
 #define N 100
 namespace gpu_mpi {
@@ -664,7 +665,7 @@ __device__ int MPI_File_get_position(MPI_File fh, MPI_Offset *offset){
     return MPI_SUCCESS;
 }
 
-#if USE_BUFFER
+#if USE_BUFFER && USE_VIEW_LAYOUT
 
 __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
     if (!(fh.amode & MPI_MODE_RDONLY) && !(fh.amode & MPI_MODE_RDWR)) return MPI_ERR_AMODE;
@@ -794,6 +795,88 @@ __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datat
     return write_size;
 }
 
+# elif USE_BUFFER
+
+__device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
+    if (!(fh.amode & MPI_MODE_RDONLY) && !(fh.amode & MPI_MODE_RDWR)) return MPI_ERR_AMODE;
+    if (fh.amode & MPI_MODE_SEQUENTIAL) return MPI_ERR_UNSUPPORTED_OPERATION;  // p514 l43
+
+    int rank;
+    MPI_Comm_rank(fh.comm, &rank);
+    if (datatype != fh.views[rank].etype) return MPI_ERR_UNSUPPORTED_DATAREP;
+
+    if(fh.seek_pos[rank] < fh.views[rank].disp) {
+        MPI_File_seek(fh, 0, MPI_SEEK_SET);
+    }
+    int seek_pos = fh.seek_pos[rank];
+
+    MPI_File_View thread_view = fh.views[rank];
+    int typemap_offset_idx = seek_pos % thread_view.filetype.typemap_len;
+    if(typemap_offset_idx==0){
+        // if not at the file beginning, need to add gap
+        seek_pos += (seek_pos == thread_view.disp ? 0 : thread_view.filetype.typemap_gap);
+    } else {
+        // calculate the "seek_pos" for the layout beginning
+        seek_pos -= thread_view.filetype.typemap[typemap_offset_idx].disp;
+    }
+
+    int read_size = 0;
+    int read_count = 0;
+    size_t etype_size = datatype.size();
+    while(read_count < count){
+        read_size += __read_buffer(fh, (char*)buf + read_count * etype_size, etype_size, 1, seek_pos+thread_view.filetype.typemap[typemap_offset_idx].disp);
+        read_count++;
+
+        typemap_offset_idx++;
+        if(typemap_offset_idx == thread_view.filetype.typemap_len){
+            seek_pos += thread_view.filetype.size();
+            typemap_offset_idx %= thread_view.filetype.typemap_len;
+        }
+    }
+    MPI_File_seek(fh, read_size*datatype.size(), MPI_SEEK_CUR);
+    return read_size;
+}
+
+__device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
+    if (fh.amode & MPI_MODE_RDONLY) return MPI_ERR_READ_ONLY;
+    if (!(fh.amode & MPI_MODE_WRONLY) && !(fh.amode & MPI_MODE_RDWR)) return MPI_ERR_AMODE;
+
+    int rank;
+    MPI_Comm_rank(fh.comm, &rank);
+    if (datatype != fh.views[rank].etype) return MPI_ERR_UNSUPPORTED_DATAREP;
+
+    if(fh.seek_pos[rank] < fh.views[rank].disp) {
+        MPI_File_seek(fh, 0, MPI_SEEK_SET);
+    }
+    int seek_pos = fh.seek_pos[rank];
+
+    MPI_File_View thread_view = fh.views[rank];
+    int typemap_offset_idx = seek_pos % thread_view.filetype.typemap_len;
+    if(typemap_offset_idx==0){
+        // if not at the file beginning, need to add gap
+        seek_pos += (seek_pos == thread_view.disp ? 0 : thread_view.filetype.typemap_gap);
+    } else {
+        // calculate the "seek_pos" for the layout beginning
+        seek_pos -= thread_view.filetype.typemap[typemap_offset_idx].disp;
+    }
+
+    int write_size = 0;
+    int write_count = 0;
+    size_t etype_size = datatype.size();
+    while(write_count < count){
+        write_size += __read_buffer(fh, (char*)buf + write_count * etype_size, etype_size, 1, seek_pos+thread_view.filetype.typemap[typemap_offset_idx].disp);
+        write_count++;
+
+        typemap_offset_idx++;
+        if(typemap_offset_idx == thread_view.filetype.typemap_len){
+            seek_pos += thread_view.filetype.size();
+            typemap_offset_idx %= thread_view.filetype.typemap_len;
+        }
+    }
+    MPI_File_seek(fh, write_size*datatype.size(), MPI_SEEK_CUR);
+    return write_size;
+}
+
 # else
 
 __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
@@ -828,7 +911,7 @@ __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype dat
     }
     // __rw_params r_params(I_READY,fh.file,datatype,data + sizeof(__rw_params),count,fh.seek_pos[rank]);
     // int layout_size = fh.views[rank].layout_len * sizeof(layout_segment);
-    int layout_size = fh.views[rank].layout_len * sizeof(layout_segment);
+    int layout_size = fh.views[rank].layout_len * sizeof(MPI_File_View::layout_segment);
     int seek_pos = fh.seek_pos[rank];
     size_t etype_size = datatype.size();
     
@@ -853,7 +936,7 @@ __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype dat
                         fh.views[rank].filetype.typemap_gap,
                         fh.views[rank].layout_cur_idx,
                         fh.views[rank].layout_cur_disp,
-                        (layout_segment*)data + sizeof(__rw_params));
+                        (MPI_File_View::layout_segment*)data + sizeof(__rw_params));
     *((__rw_params*)data) = r_params;
     memcpy(r_params.layout, fh.views[rank].layout, layout_size);
     // printf("READ POS: %d, rank %d\n", r_params.seek_pos, rank);
@@ -892,7 +975,7 @@ __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datat
         MPI_File_seek(fh, 0, MPI_SEEK_SET);
     }
     // __rw_params w_params(I_FWRITE,fh.file,datatype,data + sizeof(__rw_params),count,fh.seek_pos[rank]);
-    int layout_size = fh.views[rank].layout_len * sizeof(layout_segment);
+    int layout_size = fh.views[rank].layout_len * sizeof(MPI_File_View::layout_segment);
     int seek_pos = fh.seek_pos[rank];
     size_t etype_size = datatype.size();
 
@@ -917,7 +1000,7 @@ __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datat
                         fh.views[rank].filetype.typemap_gap,
                         fh.views[rank].layout_cur_idx,
                         fh.views[rank].layout_cur_disp,
-                        (layout_segment*)data + sizeof(__rw_params));
+                        (MPI_File_View::layout_segment*)data + sizeof(__rw_params));
     //embed metadata
     *((__rw_params*)data) = w_params;
     // memcpy(data, (void*)&w_params, sizeof(__rw_params));

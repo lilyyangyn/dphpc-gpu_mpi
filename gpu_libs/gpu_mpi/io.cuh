@@ -88,7 +88,7 @@ struct BufBlock{
     unsigned int lock;
 }; 
 
-struct layout_segment {int disp; int count;};
+// struct layout_segment {int disp; int count;};
 struct MPI_File_View{
     MPI_Offset      disp;
     MPI_Datatype    etype;
@@ -97,7 +97,7 @@ struct MPI_File_View{
     int             layout_len;
     int             layout_cur_idx;
     int             layout_cur_disp;
-    layout_segment  layout[TYPEMAP_MAXLEN];
+    struct layout_segment{int disp; int count;}  layout[TYPEMAP_MAXLEN];
     __device__ MPI_File_View(MPI_Offset disp, MPI_Datatype etype, MPI_Datatype filetype, const char* datarep)
     :disp(disp),etype(etype),filetype(filetype),datarep(datarep),layout_cur_idx(0),layout_cur_disp(0){
         // assume all basic_types in filetype are the same to etype
@@ -180,10 +180,10 @@ struct __rw_params {
     int             layout_gap;
     int             layout_cur_idx;
     int             layout_cur_disp;
-    layout_segment* layout; 
+    MPI_File_View::layout_segment* layout; 
     // __device__ __rw_params(int a,FILE* f, MPI_Datatype d, void*b, int c, int s)
     // :acttype(a),file(f),datatype(d),buf(b),count(c),seek_pos(s){}
-    __device__ __rw_params(int a,FILE* f, int d, void*b, int c, int s, int lc, int g, int lidx, int ldisp, layout_segment* l)
+    __device__ __rw_params(int a,FILE* f, int d, void*b, int c, int s, int lc, int g, int lidx, int ldisp, MPI_File_View::layout_segment* l)
     :acttype(a),file(f),etype_size(d),buf(b),count(c),seek_pos(s), layout_count(lc), layout_gap(g), layout_cur_idx(lidx), layout_cur_disp(ldisp), layout(l){}
 };
 
