@@ -1,0 +1,29 @@
+block-size 2048, content-to-write 4096, vector-length 32
+
+with layout:
+1: the average time of write is: 0.090272
+2: the average time of write is: 0.122415
+4: the average time of write is: 0.131041
+8: the average time of write is: 0.148751
+12: the average time of write is: 0.162290
+16: the average time of write is: 0.193826
+20: the average time of write is: 0.206095
+24: the average time of write is: 0.220274
+28: the average time of write is: 0.241674
+32: the average time of write is: 0.266859
+36: the average time of write is: 0.290370
+40: the average time of write is: 0.315830
+48: the average time of write is: 0.369211
+
+without layout:
+1: the average time of write is: 0.440976
+2: the average time of write is: 0.448609
+4: the average time of write is: 0.456442
+8: the average time of write is: 0.472423
+12: the average time of write is: 0.499977
+16: the average time of write is: 0.538772
+24: the average time of write is: 0.575225
+32: the average time of write is: 0.805213
+36: the average time of write is: 0.874229
+40: the average time of write is: 0.996437
+48: the average time of write is: 1.172563

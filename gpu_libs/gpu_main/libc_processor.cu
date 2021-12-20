@@ -179,7 +179,7 @@ void process_gpu_libc(void* mem, size_t size) {
         int cnt = fwrite(buf, 1, writebytes, file);
         ((size_t*)mem)[1] = cnt;
         // assert(cnt == INIT_BUFFER_BLOCK_SIZE);
-        printf("we write %d bytes: \n", cnt);
+        // printf("we write %d bytes: \n", cnt);
         set_i_ready_flag(mem);
     }
 
