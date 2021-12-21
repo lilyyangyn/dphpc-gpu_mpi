@@ -432,7 +432,8 @@ __device__ int MPI_File_open(MPI_Comm comm, const char *filename, int amode, MPI
                 shared_fh.views = (MPI_File_View*)malloc(size*sizeof(MPI_File_View)); 
                 for (int i = 0; i < size; i++){
                     shared_fh.seek_pos[i] = init_pos;
-                    shared_fh.views[i] = MPI_File_View(0, MPI_CHAR, MPI_CHAR, "native");
+                    // see documentation p492 line 17
+                    shared_fh.views[i] = MPI_File_View(0, MPI_BYTE, MPI_BYTE, "native");
                 }   
                 // init_pos = 1;
                 shared_fh.shared_seek_pos = (int*)malloc(sizeof(int));
