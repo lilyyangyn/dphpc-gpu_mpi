@@ -27,3 +27,50 @@ without layout:
 36: the average time of write is: 0.874229
 40: the average time of write is: 0.996437
 48: the average time of write is: 1.172563
+
+explicit seek:
+1: the average time of write is: 0.289111
+2: the average time of write is: 0.365479
+4: the average time of write is: 0.379745
+8: the average time of write is: 0.546664
+16: the average time of write is: 0.832882
+24: the average time of write is: 1.246524
+32: the average time of write is: 2.217550
+40: the average time of write is: 3.195054
+48: the average time of write is: 3.969167
+
+
+block-size 2048, content-to-write 4096, contiguous-length 32
+
+with layout:
+1: the average time of write is: 0.089885
+2: the average time of write is: 0.091590
+4: the average time of write is: 0.100142
+8: the average time of write is: 0.114992
+16: the average time of write is: 0.123649
+24: the average time of write is: 0.129958
+32: the average time of write is: 0.164396
+40: the average time of write is: 0.174642
+48: the average time of write is: 0.186116
+
+without layout
+1: the average time of write is: 0.431112
+2: the average time of write is: 0.435440
+4: the average time of write is: 0.437976
+8: the average time of write is: 0.457012
+16: the average time of write is: 0.488818
+24: the average time of write is: 0.515972
+32: the average time of write is: 0.585249
+40: the average time of write is: 0.639384
+48: the average time of write is: 0.673179
+
+explicit seek:
+1: the average time of write is: 0.089771
+2: the average time of write is: 0.090661
+4: the average time of write is: 0.103849
+8: the average time of write is: 0.114814
+16: the average time of write is: 0.126917
+24: the average time of write is: 0.133601
+32: the average time of write is: 0.156198
+40: the average time of write is: 0.172367
+48: the average time of write is: 0.185903
