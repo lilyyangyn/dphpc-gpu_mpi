@@ -5,3 +5,4 @@ tags
 .vscode
 llvm/
 toolchain_tests/basicIO/*.cu
+toolchain_tests/nio/*.cu

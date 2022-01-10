@@ -27,6 +27,8 @@ struct MPI_Status {
 struct MPI_Request_impl;
 using MPI_Request = MPI_Request_impl*;
 
+struct MPI_File;
+
 #define MPI_REQUEST_NULL nullptr
 
 
@@ -128,6 +130,8 @@ __device__ int MPI_Waitsome(int incount, MPI_Request array_of_requests[],
 __device__ int MPI_Wait(MPI_Request *request, MPI_Status *status);
 
 __device__ int MPI_Request_free(MPI_Request *request);
+
+__device__ int MPI_File_iread(MPI_File fh, void *buf, int count, MPI_Datatype datatype, MPI_Request *request);
 
 #define MPI_THREAD_SINGLE 1
 #define MPI_THREAD_FUNNELED 2

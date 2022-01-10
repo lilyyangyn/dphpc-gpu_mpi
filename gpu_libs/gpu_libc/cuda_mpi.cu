@@ -1,5 +1,7 @@
 #include "cuda_mpi.cuh"
 
+#define ENABLE_GPU_MPI_LOG 1
+
 #ifdef ENABLE_GPU_MPI_LOG
 #define LOG(fmt, ...) printf("Thread %d " __FILE__ ":%d " fmt "\n", threadIdx.x + blockDim.x * blockIdx.x, __LINE__,## __VA_ARGS__)
 #else
@@ -116,6 +118,34 @@ __device__ PendingOperation* irecv(int src, void* data, int count, int ctx, int 
 
     return po;
 }
+
+// __device__ PendingIOOperation* iread(void* iohandle) {
+//     LOG("iread");
+
+//     PendingIOOperation* iopo = threadPrivateState().allocatePendingOperation();
+//     while (!po) {
+//         po = threadPrivateState().allocatePendingOperation();
+//         LOG("WARNING: Pending operations limit is reached in iread, this can cause a deadlock\n");
+//         progress();
+//     }
+
+//     po->type = PendingOperation::Type::IO;
+//     po->state = PendingOperation::State::STARTED;
+//     po->iohandle = iohandle;
+//     po->canBeFreed = false;
+//     // po->otherThread = src;
+//     // po->count = count;
+//     // po->ctx = ctx;
+//     // po->tag = tag;
+//     // po->isSynchronous = false; // this flag is not used for receive operation
+//     // po->isBuffered = false;
+//     // po->data = data;
+//     // po->buffer = nullptr;
+//     // po->done = false;
+//     progress();
+
+//     return po;
+// }
 
 __device__ void progressStartedSend(PendingOperation& send, ProgressState& state) {
     LOG("progressStartedSend() %p", &send);
@@ -445,6 +475,55 @@ __host__ __device__ void progress() {
 #endif
 }
 
+__device__ void progressStartedIO(PendingIOOperation& ioop) {
+    //delegate to host
+    int buffer_size = 2048;
+    void *data = CudaMPI::sharedState().freeManagedMemory.allocate(buffer_size);
+    char *p = (char*)data;
+    *((int*)p) = I_FILE_ITEST;
+    p+=8;
+    memcpy((aiocb*)p,ioop.aiocb_p,sizeof(aiocb));
+    // *((aiocb*)p) = *(ioop.aiocb_p);
+
+    CudaMPI::sharedState().deviceToHostCommunicator.delegateToHost(data, buffer_size); 
+    while (*((int*)data) != I_READY){}
+    int ret = ((int*)data)[1];
+    sharedState().freeManagedMemory.free(data);
+    if(ret == -1){
+        LOG("ERROR!!!");
+        return;
+    }
+    else {
+        memcpy(ioop.buf, (void*)ioop.aiocb_p->aio_buf, ioop.aiocb_p->aio_nbytes);
+        ioop.state = PendingIOOperation::State::COMPLETED;
+    }
+}
+
+__device__ void progressCompletedIO(PendingIOOperation& ioop) {
+    LOG("progressCompletedIO %p", &ioop);
+    
+    if (ioop.canBeFreed) {
+        LOG("freeing local IO operation");
+        LOG("%s",ioop.aiocb_p->aio_buf);
+        delete ioop.aiocb_p;
+        delete &ioop;
+        // threadPrivateState().getPendingOperations().pop(&recv);
+    }
+}
+
+
+__device__ void progressIO(PendingIOOperation& ioop) {
+    LOG("progressIO() %p", &ioop);
+    switch (ioop.state) {
+        case PendingIOOperation::State::STARTED:
+            progressStartedIO(ioop);
+            break;
+        case PendingIOOperation::State::COMPLETED:
+            progressCompletedIO(ioop);
+            break;
+    }
+}
+
 __device__ bool test(PendingOperation* op) {
     LOG("test()");
     assert(op->canBeFreed == false);
@@ -470,6 +549,24 @@ __device__ void wait(PendingOperation* op) {
     while (!test(op)) {}
 }
 
+__device__ bool testIO(PendingIOOperation* ioop) {
+    LOG("testIO()");
+    assert(ioop->canBeFreed == false);
+    //currently blocking, not binding into the private thread state.
+    progressIO(*ioop);
+    if (ioop->state == PendingIOOperation::State::COMPLETED) {
+        ioop->canBeFreed = true;
+        progressCompletedIO(*ioop);
+        return true;
+    }
+    return false;
+}
+
+__device__ void waitIO(PendingIOOperation* ioop) {
+    LOG("waitIO()");
+    assert(ioop->canBeFreed == false);
+    while (!testIO(ioop)) {}
+}
 
 DeviceToHostCommunicator::DeviceToHostCommunicator(size_t queueSize, size_t numThreads)
     : queue(queueSize)

@@ -3,6 +3,8 @@
 
 #include <cassert>
 #include <cstdio>
+#include <errno.h>
+#include <aio.h>
 
 int get_i_flag(void* mem){
     return ((int*)mem)[0];
@@ -10,6 +12,44 @@ int get_i_flag(void* mem){
 
 void set_i_ready_flag(void* mem){
     ((int*)mem)[0] = I_READY;
+}
+
+int libc_iread_posixaio(void* mem, size_t size){
+    char * data = (char *)mem;
+
+    aiocb cb;
+    memset(&cb, 0, sizeof(aiocb));
+
+    char * p = data;
+    p += 8; cb.aio_fildes = fileno( *((FILE**)p) );
+    p += 8; cb.aio_nbytes = *((size_t*)p);
+    p += 8; cb.aio_offset = *((off_t*)p);
+    p += 8; cb.aio_buf = *((void**)p);
+
+    //TODO: error checking
+    int ret = aio_read(&cb);
+    p = (char*)mem+8;
+    memcpy((aiocb*)p,&cb,sizeof(aiocb));
+
+    // *((aiocb*)p) = cb; //send cb back.
+    return ret;
+}
+
+int libc_itest_posixaio(void* mem, size_t size){
+    char *p = (char*)mem;
+    p+=8;
+    aiocb cb = *((aiocb*)p);
+    aiocb* list_p[1] = {&cb};
+    int ret = aio_suspend(list_p,1,0);
+    printf("%s", (char*)cb.aio_buf);
+    return ret;
+    
+    // while(aio_error(&cb) == EINPROGRESS){printf("working\n");}
+    // return 0;
+}
+
+void libc_iread_io(void* mem, size_t size){
+    
 }
 
 void process_gpu_libc(void* mem, size_t size) {
@@ -201,9 +241,15 @@ void process_gpu_libc(void* mem, size_t size) {
         fclose(file);
         set_i_ready_flag(mem);
     }
-    
-    
-    
-    
-    
+
+//  design a prefix or some binary encoding.
+    else if(get_i_flag(mem) == I_FILE_IREAD){
+        ((int*)mem)[1] = libc_iread_posixaio(mem,size);
+        set_i_ready_flag(mem);
+    }
+
+    else if(get_i_flag(mem) == I_FILE_ITEST){
+        ((int*)mem)[1] = libc_itest_posixaio(mem,size); 
+        set_i_ready_flag(mem);
+    }
 }

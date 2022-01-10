@@ -1,17 +1,29 @@
 #include "io.cuh"
+
 #include "mpi_common.cuh"
+#include "cuda_mpi.cuh"
 #include "datatypes.cuh"
 #include "../gpu_main/device_host_comm.cuh"
+
 #include <cassert>
 #include <cooperative_groups.h>
+#include <aio.h>
 
 /**
  * version switch
  */
+//buffer
 #define USE_BUFFER true
 #define USE_VIEW_LAYOUT true
 
+
+
+
+
 #define N 100
+
+struct MPI_Request_impl;
+
 namespace gpu_mpi {
 }
 
@@ -103,6 +115,7 @@ __device__ FILE* __open_file(const char* filename, int amode, int* file_exist){
     
     *file_exist = ((int*)data)[1];
     FILE* file = ((FILE**)data)[2];
+    
     free_host_mem(data);
 
     return file;
@@ -1127,3 +1140,4 @@ __device__ int MPI_File_write_shared(MPI_File fh, const void *buf, int count, MP
     mutex_unlock(&shared_write_lock);
     return 0;
 }
+

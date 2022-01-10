@@ -16,20 +16,34 @@
 
 #define MPI_COLLECTIVE_TAG (-2)
 
+//nio
+#define USE_AIO true
+#define USE_URING false
+
 // internal opaque object
 struct MPI_Request_impl {
+    //TODO: need better implementation, should not direct IOOperation in the declairation of the func.
+
+    
+    enum Type { SR, IO };
+
+    union {
+        CudaMPI::PendingOperation* pendingOperation;
+        CudaMPI::PendingIOOperation* pendingIOOperation;
+    };
+
+    Type type;
+    int ref_count;
+
     __device__ MPI_Request_impl(CudaMPI::PendingOperation* pendingOperation) 
         : ref_count(1) 
-        , pendingOperation(pendingOperation)
-    {}
-    
-    CudaMPI::PendingOperation* pendingOperation;
-    
-    int ref_count;
+        , pendingOperation(pendingOperation) 
+    {this->type = SR; }
+    __device__ MPI_Request_impl(CudaMPI::PendingIOOperation* ioop, int io) 
+        : ref_count(1)
+        , pendingIOOperation(ioop)
+    {this->type = Type(io);}
 };
-
-
-
 namespace gpu_mpi {
     
 __device__ void incRequestRefCount(MPI_Request request) {
@@ -623,28 +637,102 @@ __device__ int MPI_Waitsome(int incount, MPI_Request array_of_requests[],
     NOT_IMPLEMENTED;
     return MPI_SUCCESS;
 }
+
 __device__ int MPI_Wait(MPI_Request *request, MPI_Status *status) {
     if (request == MPI_REQUEST_NULL) {
         if (status) *status = MPI_Status();
     }
     
-    CudaMPI::wait((*request)->pendingOperation);
-    MPI_Request_free(request);
-    if (status) *status = MPI_Status();
+    switch ((*request)->type) {
+        case MPI_Request_impl::Type::SR:
+            CudaMPI::wait((*request)->pendingOperation);
+            MPI_Request_free(request);
+            if (status) *status = MPI_Status();
+            break;
+        case MPI_Request_impl::Type::IO:
+            CudaMPI::waitIO((*request)->pendingIOOperation);
+            MPI_Request_free(request);
+            if (status) *status = MPI_Status();// ?
+            break;
+    }
+
     return MPI_SUCCESS;
 }
 
 
 
 __device__ int MPI_Request_free(MPI_Request *request) {
-    assert((*request)->ref_count > 0);
-    (*request)->ref_count--;
-    if ((*request)->ref_count == 0) delete *request;
-    *request = MPI_REQUEST_NULL;
+    switch ((*request)->type) {
+        case MPI_Request_impl::Type::SR:
+            assert((*request)->ref_count > 0);
+            (*request)->ref_count--;
+            if ((*request)->ref_count == 0) delete *request;
+            *request = MPI_REQUEST_NULL;
+            break;
+        case MPI_Request_impl::Type::IO:
+            assert((*request)->ref_count > 0);
+            (*request)->ref_count--;
+            if ((*request)->ref_count == 0) delete *request;
+            *request = MPI_REQUEST_NULL;
+            break;
+    }
     return MPI_SUCCESS;
 }
 
+struct MPI_File;
+/* ----- Non-blocking IO ------ */
+#if USE_AIO && !USE_URING
+__device__ int MPI_File_iread(MPI_File fh, void *buf, int count, MPI_Datatype datatype, MPI_Request *request){
+    if (!(fh.amode & MPI_MODE_RDONLY) && !(fh.amode & MPI_MODE_RDWR)) return MPI_ERR_AMODE;
+    if (fh.amode & MPI_MODE_SEQUENTIAL) return MPI_ERR_UNSUPPORTED_OPERATION;  // p514 l43
+    int rank,size;
+    MPI_Comm_rank(fh.comm, &rank);
+    MPI_Comm_size(fh.comm, &size);
+    if(rank == 0) {
+        int msg_size = 48;  // sizeof(int) + sizeof(r_param) + sizeof(char) * (count + 1);: misaligned address
+        int buffer_size = count*datatype.size();
+        void *msg =  CudaMPI::sharedState().freeManagedMemory.allocate(msg_size);
+        void *data = CudaMPI::sharedState().freeManagedMemory.allocate(buffer_size);
+        char *p = (char*)msg;
+        *((int*)p) = I_FILE_IREAD;          p += 8;
+        *((FILE**)p) = fh.file;             p += 8;
+        *((size_t*)p) = buffer_size;        p += 8;
+        *((off_t*)p) = fh.seek_pos[rank];   p += 8;
+        *((void**)p) = data;                p += 8; //aio temp buf, this is managed memory
+        // *((void**)p) = buf;                 //dest buf, this is in process private space
 
+
+        CudaMPI::sharedState().deviceToHostCommunicator.delegateToHost(msg, msg_size);  //schedule io task
+        /* // debug only:
+        // while (*((int*)msg) != I_READY){}
+        // memcpy(buf, p, datatype.size() * count);
+        */
+        
+        aiocb* newcb_p = new aiocb; //TODO: delete
+
+        size_t ret = ((size_t*)msg)[1]; //ret of scheduling
+        p = (char*)msg+8; 
+        memcpy(newcb_p,(aiocb*)p,sizeof(aiocb));
+        // *newcb_p = *((aiocb*)p); //get the cb
+        //ori:: CudaMPI::PendingOperation* op = CudaMPI::iread(newcb_p);
+        CudaMPI::PendingIOOperation* ioop = new CudaMPI::PendingIOOperation;
+        ioop->aiocb_p = newcb_p;
+        ioop->buf = buf;
+        (*request) = new (MPI_Request_impl)(ioop, 1); //TODO: delete
+
+        MPI_File_seek(fh, newcb_p->aio_nbytes, MPI_SEEK_CUR);// documentation P518 L30
+        CudaMPI::sharedState().freeManagedMemory.free(msg);
+        return ret;
+    }
+    return true;
+}
+
+
+#elif USE_URING
+__device__ int MPI_File_iread(MPI_File fh, void *buf, int count, MPI_Datatype datatype, MPI_Request *request){}
+#elif !USE_AIO
+__device__ int MPI_File_iread(MPI_File fh, void *buf, int count, MPI_Datatype datatype, MPI_Request *request){}
+#endif
 
 
 

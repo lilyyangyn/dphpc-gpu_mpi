@@ -57,16 +57,27 @@
 
 #define MPI_DISPLACEMENT_CURRENT        -1
 
-#define I_READY                         0
-#define I_FOPEN                         1
-#define I_FSEEK                         2
-#define I_FREAD_BASIC                   3
-#define I_FWRITE_BASIC                  4
-#define I_FREAD_BUFFER                  5
-#define I_FWRITE_BUFFER                 6
-#define I_FFLUSH                        7
-#define I_FDELETE                       8
-#define I_FCLOSE                        9
+#define I_READY                         0x80000000 // 0b10000000000000000000000000000000
+#define I_FOPEN                         0x40000000 // 0b00000000000000000000000000000001
+#define I_FSEEK                         0x20000000 // 0b00100000000000000000000000000000
+#define I_FFLUSH                        0x10000000 // 0b00010000000000000000000000000000
+#define I_FDELETE                       0x08000000 // 0b00001000000000000000000000000000
+#define I_FCLOSE                        0x04000000 // 0b00000100000000000000000000000000
+
+/* future flag design ...
+#define I_WR_READ                       0x00000001
+#define I_WR_WRITE                      0x00000002
+#define I_WR_BASIC                      0x00000100
+#define I_WR_BUFFER                     0x00000200
+#define I_WR_AIO                        0x00000400
+*/
+#define I_FREAD_BASIC                   0x00000101
+#define I_FWRITE_BASIC                  0x00000102
+#define I_FREAD_BUFFER                  0x00000201
+#define I_FWRITE_BUFFER                 0x00000202
+#define I_FILE_IREAD                    0x00000401
+#define I_FILE_IWRITE                   0x00000402
+#define I_FILE_ITEST                    0x00000404
 
 #define BLOCK_NOT_IN                    0
 #define BLOCK_IN_CLEAN                  1
@@ -74,6 +85,9 @@
 
 #define INIT_BUFFER_BLOCK_NUM           100
 #define INIT_BUFFER_BLOCK_SIZE          2048
+
+struct MPI_Request_impl;
+using MPI_Request = MPI_Request_impl*;
 
 struct MPI_Status;
 namespace gpu_mpi { 
@@ -149,6 +163,7 @@ struct MPI_File{
     int*            seek_pos;
     int             amode;
     FILE*           file;
+    int             fildes;
     const char*     filename;
     int*            shared_seek_pos;
 
@@ -181,6 +196,7 @@ struct __rw_params {
     int             layout_cur_idx;
     int             layout_cur_disp;
     MPI_File_View::layout_segment* layout; 
+    __device__ __rw_params(){}
     // __device__ __rw_params(int a,FILE* f, MPI_Datatype d, void*b, int c, int s)
     // :acttype(a),file(f),datatype(d),buf(b),count(c),seek_pos(s){}
     __device__ __rw_params(int a,FILE* f, int d, void*b, int c, int s, int lc, int g, int lidx, int ldisp, MPI_File_View::layout_segment* l)
@@ -215,6 +231,7 @@ __device__ int MPI_File_read_at(MPI_File fh, MPI_Offset offset, void *buf, int c
 __device__ int MPI_File_write_at(MPI_File fh, MPI_Offset offset, void *buf, int count, MPI_Datatype datatype, MPI_Status *status);
 __device__ int MPI_File_read_shared(MPI_File fh, void *buf, int count, MPI_Datatype datatype, MPI_Status *status);
 __device__ int MPI_File_write_shared(MPI_File fh, const void *buf, int count, MPI_Datatype datatype, MPI_Status *status);
+// __device__ int MPI_File_iread(MPI_File fh, void *buf, int count, MPI_Datatype datatype, MPI_Request *request);
 // see documentation mpi3.1 p520
 __device__ int MPI_File_seek(MPI_File fh, MPI_Offset offset, int whence);
 // see documentation mpi3.1 p521

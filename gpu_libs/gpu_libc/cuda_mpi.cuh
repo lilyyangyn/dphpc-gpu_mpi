@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <cassert>
 #include <type_traits>
+#include <aio.h>
 
 #include <cuda.h>
 #include <curand_kernel.h>
@@ -15,6 +16,10 @@
 // this header may change or disappear in the future cuda releases
 // in this case copy its contents from CUDA 11.4 
 #include <cooperative_groups/details/helpers.h>
+
+// copied from io.cuh
+#define I_READY                         0x80000000
+#define I_FILE_ITEST                    0x00000404
 
 namespace CudaMPI {
 
@@ -229,6 +234,30 @@ struct PendingOperation {
 
 };
 
+struct PendingIOOperation { //created by student, mimicing PendingOperation
+    enum class State {
+        STARTED,
+        COMPLETED
+    };
+    
+    State state = State::STARTED;
+
+    // this flag is changed by MPI_WAIT or MPI_TEST
+    // when it is set to true, progress engine allowed to drop pending operation
+    bool canBeFreed = false;
+
+    //for aio control block
+    union{
+        aiocb* aiocb_p = nullptr;
+    };
+
+    void* buf = nullptr;
+
+    // this variable is changed by matching thread when operation is done
+    volatile bool done = false;
+};
+
+
 // This class is used for tracking skipped operations in STARTED state.
 // It helps to prevent breaking the standardized order of MPI operations.
 class ProgressState {
@@ -255,6 +284,8 @@ __host__ __device__ void progress();
 
 __device__ void progressSend(PendingOperation& send, ProgressState& state);
 __device__ void progressRecv(PendingOperation& recv, ProgressState& state);
+
+__device__ void progressIO(PendingIOOperation& ioop, ProgressState& state);
 
 __device__ void progressStartedRecv(PendingOperation& recv, ProgressState& state);
 __device__ void progressPostedRecv(PendingOperation& recv);
@@ -547,6 +578,10 @@ __device__ void progress();
 __device__ bool test(PendingOperation* op);
 
 __device__ void wait(PendingOperation* op);
+
+__device__ bool testIO(PendingIOOperation* ioop);
+
+__device__ void waitIO(PendingIOOperation* ioop);
 
 __device__ void initialize();
 
