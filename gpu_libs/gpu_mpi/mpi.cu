@@ -693,6 +693,8 @@ __device__ int MPI_File_iread(MPI_File fh, void *buf, int count, MPI_Datatype da
         int buffer_size = count*datatype.size();
         void *msg =  CudaMPI::sharedState().freeManagedMemory.allocate(msg_size);
         void *data = CudaMPI::sharedState().freeManagedMemory.allocate(buffer_size);
+        memset(&msg, 0, msg_size);
+        memset(&data, 0, buffer_size);
         char *p = (char*)msg;
         *((int*)p) = I_FILE_IREAD;          p += 8;
         *((FILE**)p) = fh.file;             p += 8;
