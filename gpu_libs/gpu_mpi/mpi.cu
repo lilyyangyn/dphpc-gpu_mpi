@@ -241,8 +241,13 @@ __device__ int MPI_Type_contiguous(int count, MPI_Datatype oldtype, MPI_Datatype
     // newtype -> typemap_len = count * oldtype.typemap_len;
     // for (int i = 0; i < count; i++) copy_typemap_once(newtype, oldtype, i, 0);
     // newtype -> committed = false;
-    MPI_Datatype contiguousType;
-    for (int i = 0; i < count; i++) contiguousType.add_typemap_at_end(oldtype, 0);
+
+    // MPI_Datatype contiguousType;
+    // for (int i = 0; i < count; i++) contiguousType.add_typemap_at_end(oldtype, 0);
+
+    MPI_Datatype contiguousType = oldtype;
+    contiguousType.self_replicate(count);
+
     *newtype = contiguousType;
     return MPI_SUCCESS;
 }
@@ -252,15 +257,21 @@ __device__ int MPI_Type_vector(int count, int blocklength, int stride, MPI_Datat
     if (stride < blocklength) return MPI_ERR_OTHER;
     // In all our use cases, we do not allow a typemap to overlap itself.
 
-    MPI_Datatype vectorType;
+    // MPI_Datatype vectorType;
+    // int gap = (int)(stride - blocklength) * oldtype.size();
+    // for(int i = 0; i < count; i++){
+    //     vectorType.add_typemap_at_end(oldtype, gap);
+    //     for(int j = 1; j < blocklength; j++){
+    //         vectorType.add_typemap_at_end(oldtype, 0);
+    //     }
+    // }
+    // vectorType.typemap_gap = gap;
+
+    MPI_Datatype vectorType = oldtype;
     int gap = (int)(stride - blocklength) * oldtype.size();
-    for(int i = 0; i < count; i++){
-        vectorType.add_typemap_at_end(oldtype, gap);
-        for(int j = 1; j < blocklength; j++){
-            vectorType.add_typemap_at_end(oldtype, 0);
-        }
-    }
-    vectorType.typemap_gap = gap;
+    vectorType.self_replicate(blocklength);
+    vectorType.add_gap(gap);
+    vectorType.self_replicate(count);
 
     *newtype = vectorType;  
     return MPI_SUCCESS;

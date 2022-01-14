@@ -9,7 +9,7 @@
  * version switch
  */
 #define USE_BUFFER true
-#define USE_VIEW_LAYOUT true
+#define USE_VIEW_LAYOUT false
 
 #define N 100
 namespace gpu_mpi {
@@ -63,25 +63,26 @@ __device__ __host__ void __show_memory(char * mem, size_t size){
 
 __device__ int __view_pos_to_file_pos(MPI_File_View view, int position){
     
-    int typemap_offset_idx = position % view.filetype.typemap_len;
-    int typemap_idx = position / view.filetype.typemap_len;
-    return view.disp + typemap_idx * view.filetype.size() + view.filetype.typemap[typemap_offset_idx].disp;
+    // int typemap_offset_idx = position % view.filetype.typemap_len;
+    // int typemap_idx = position / view.filetype.typemap_len;
+    // return view.disp + typemap_idx * view.filetype.size() + view.filetype.typemap[typemap_offset_idx].disp;
+    return view.filetype.__view_pos_to_file_pos(position);
+
 }
 
 __device__ int __file_pos_to_view_pos(MPI_File_View view, int position){
     int adjusted_pos = position - view.disp;
     if(adjusted_pos < 0) return -1;
-    int typemap_offset = adjusted_pos % view.filetype.size();
-    int typemap_idx = adjusted_pos / view.filetype.size();
-    int typemap_offset_idx = 0;
-    while(typemap_offset_idx < view.filetype.typemap_len){
-        if(typemap_offset == view.filetype.typemap[typemap_offset_idx].disp){
-            break;
-        }
-        typemap_offset_idx++;
-    }
-    if(typemap_offset_idx == view.filetype.typemap_len) return -1;
-    return typemap_idx * view.filetype.typemap_len + typemap_offset_idx;
+    return view.filetype.__file_pos_to_view_pos(adjusted_pos);
+    // int typemap_offset_idx = 0;
+    // while(typemap_offset_idx < view.filetype.typemap_len){
+    //     if(typemap_offset == view.filetype.typemap[typemap_offset_idx].disp){
+    //         break;
+    //     }
+    //     typemap_offset_idx++;
+    // }
+    // if(typemap_offset_idx == view.filetype.typemap_len) return -1;
+    // return typemap_idx * view.filetype.typemap_len + typemap_offset_idx;
 }
 
 __device__ FILE* __open_file(const char* filename, int amode, int* file_exist){
@@ -572,11 +573,12 @@ __device__ int MPI_File_set_view(MPI_File fh, MPI_Offset disp, MPI_Datatype etyp
     // now only support single type repitition
     // assert(etype == filetype);
 
-    for(int i = 0; i < filetype.typemap_len; i++){
-        if(etype != filetype.typemap[i].basic_type){
-            return MPI_ERR_UNSUPPORTED_DATAREP;
-        }
-    }
+    // for(int i = 0; i < filetype.typemap_len; i++){
+    //     if(etype != filetype.typemap[i].basic_type){
+    //         return MPI_ERR_UNSUPPORTED_DATAREP;
+    //     }
+    // }
+    if (!filetype.type_check(etype)) return MPI_ERR_UNSUPPORTED_DATAREP;
 
     int rank;
     MPI_Comm_rank(fh.comm, &rank);
@@ -639,6 +641,7 @@ __device__ int MPI_File_seek(MPI_File fh, MPI_Offset offset, int whence){
     }
     fh.seek_pos[rank] = new_offset;
     
+#if USE_VIEW_LAYOUT
     // view layout related
     if(!(fh.views[rank].layout_len == 1 && fh.views[rank].filetype.typemap_gap == 0)){
         // not contigues
@@ -652,6 +655,7 @@ __device__ int MPI_File_seek(MPI_File fh, MPI_Offset offset, int whence){
             pos -= fh.views[rank].layout[i].count;
         }
     }
+#endif
 
     return MPI_SUCCESS;
 }
@@ -815,29 +819,47 @@ __device__ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype dat
     MPI_File_View thread_view = fh.views[rank];
     int read_size = 0;
 
-    int typemap_offset_idx = seek_pos % thread_view.filetype.typemap_len;
+    // int typemap_offset_idx = seek_pos % thread_view.filetype.typemap_len;
+    int typemap_offset_idx = seek_pos % thread_view.filetype.viewlen();
     if(typemap_offset_idx==0){
         // if not at the file beginning, need to add gap
-        seek_pos += (seek_pos == thread_view.disp ? 0 : thread_view.filetype.typemap_gap);
+        // seek_pos += (seek_pos == thread_view.disp ? 0 : thread_view.filetype.typemap_gap);
+        // typemap_gap is always 0 when not using layout!
     } else {
         // calculate the "seek_pos" for the layout beginning
-        seek_pos -= thread_view.filetype.typemap[typemap_offset_idx].disp;
+        // seek_pos -= thread_view.filetype.typemap[typemap_offset_idx].disp;
+        seek_pos -= thread_view.filetype.__view_pos_to_file_pos(typemap_offset_idx);
     }
 
     int read_count = 0;
     size_t etype_size = datatype.size();
+    // while(read_count < count){
+    //     read_size += __read_buffer(fh, (char*)buf + read_count * etype_size, etype_size, 1, seek_pos+thread_view.filetype.typemap[typemap_offset_idx].disp);
+    //     read_count++;
+
+    //     typemap_offset_idx++;
+    //     if(typemap_offset_idx == thread_view.filetype.typemap_len){
+    //         seek_pos += thread_view.filetype.size();
+    //         typemap_offset_idx %= thread_view.filetype.typemap_len;
+    //     }
+    // }
     while(read_count < count){
-        read_size += __read_buffer(fh, (char*)buf + read_count * etype_size, etype_size, 1, seek_pos+thread_view.filetype.typemap[typemap_offset_idx].disp);
+        read_size += __read_buffer(fh, (char*)buf + read_count * etype_size, etype_size, 1, seek_pos+thread_view.filetype.__view_pos_to_file_pos(typemap_offset_idx));
         read_count++;
 
         typemap_offset_idx++;
-        if(typemap_offset_idx == thread_view.filetype.typemap_len){
+        if(typemap_offset_idx == thread_view.filetype.viewlen()){
             seek_pos += thread_view.filetype.size();
-            typemap_offset_idx %= thread_view.filetype.typemap_len;
+            typemap_offset_idx = 0;
         }
     }
     MPI_File_seek(fh, read_size*datatype.size(), MPI_SEEK_CUR);
     return read_size;
+    // while(read_count < count)
+    // {
+    //     read_size += __read_buffer(fh, (char*)buf + read_count * etype_size, etype_size, 1, seek_pos+thread_view.filetype.next());
+    //     read_count++;
+    // }
 }
 
 __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
@@ -856,25 +878,44 @@ __device__ int MPI_File_write(MPI_File fh, const void *buf, int count, MPI_Datat
     int write_size = 0;
     MPI_File_View thread_view = fh.views[rank];
     
-    int typemap_offset_idx = seek_pos % thread_view.filetype.typemap_len;
+    // int typemap_offset_idx = seek_pos % thread_view.filetype.typemap_len;
+    // if(typemap_offset_idx==0){
+    //     // if not at the file beginning, need to add gap
+    //     seek_pos += (seek_pos == thread_view.disp ? 0 : thread_view.filetype.typemap_gap);
+    // } else {
+    //     // calculate the "seek_pos" for the layout beginning
+    //     seek_pos -= thread_view.filetype.typemap[typemap_offset_idx].disp;
+    // }
+    int typemap_offset_idx = seek_pos % thread_view.filetype.viewlen();
     if(typemap_offset_idx==0){
         // if not at the file beginning, need to add gap
-        seek_pos += (seek_pos == thread_view.disp ? 0 : thread_view.filetype.typemap_gap);
+        // seek_pos += (seek_pos == thread_view.disp ? 0 : thread_view.filetype.typemap_gap);
+        // typemap_gap is always 0 when not using layout!
     } else {
         // calculate the "seek_pos" for the layout beginning
-        seek_pos -= thread_view.filetype.typemap[typemap_offset_idx].disp;
+        seek_pos -= thread_view.filetype.__view_pos_to_file_pos(typemap_offset_idx);
     }
 
     int write_count = 0;
     size_t etype_size = datatype.size();
+    // while(write_count < count){
+    //     write_size += __read_buffer(fh, (char*)buf + write_count * etype_size, etype_size, 1, seek_pos+thread_view.filetype.typemap[typemap_offset_idx].disp);
+    //     write_count++;
+
+    //     typemap_offset_idx++;
+    //     if(typemap_offset_idx == thread_view.filetype.typemap_len){
+    //         seek_pos += thread_view.filetype.size();
+    //         typemap_offset_idx %= thread_view.filetype.typemap_len;
+    //     }
+    // }
     while(write_count < count){
-        write_size += __read_buffer(fh, (char*)buf + write_count * etype_size, etype_size, 1, seek_pos+thread_view.filetype.typemap[typemap_offset_idx].disp);
+        write_size += __write_buffer(fh, (char*)buf + write_count * etype_size, etype_size, 1, seek_pos+thread_view.filetype.__view_pos_to_file_pos(typemap_offset_idx));
         write_count++;
 
         typemap_offset_idx++;
-        if(typemap_offset_idx == thread_view.filetype.typemap_len){
+        if(typemap_offset_idx == thread_view.filetype.viewlen()){
             seek_pos += thread_view.filetype.size();
-            typemap_offset_idx %= thread_view.filetype.typemap_len;
+            typemap_offset_idx = 0;
         }
     }
     MPI_File_seek(fh, write_size*datatype.size(), MPI_SEEK_CUR);

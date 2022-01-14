@@ -102,9 +102,12 @@ struct MPI_File_View{
     :disp(disp),etype(etype),filetype(filetype),datarep(datarep),layout_cur_idx(0),layout_cur_disp(0){
         // assume all basic_types in filetype are the same to etype
         layout_len = 1;
-        int filetype_disp = filetype.typemap[0].disp;
-        for(int i = 1; i < filetype.typemap_len; i++){
-            int new_filetype_disp = filetype.typemap[i].disp;
+        // int filetype_disp = filetype.typemap[0].disp;
+        int filetype_disp = filetype.__view_pos_to_file_pos(0);
+        // for(int i = 1; i < filetype.typemap_len; i++){
+        for(int i = 1; i < filetype.viewlen(); i++){
+            // int new_filetype_disp = filetype.typemap[i].disp;
+            int new_filetype_disp = filetype.__view_pos_to_file_pos(i);
             // printf("TYPEMAP -- disp: %d, etype_size: %d, new_disp: %d\n", filetype_disp, (int)etype.size(), new_filetype_disp);
             if(filetype_disp + etype.size() != new_filetype_disp){
                 layout_len++;
@@ -112,13 +115,16 @@ struct MPI_File_View{
             filetype_disp = new_filetype_disp;
         }
 
-        filetype_disp = filetype.typemap[0].disp;
+        // filetype_disp = filetype.typemap[0].disp;
+        filetype_disp = filetype.__view_pos_to_file_pos(0);
         if(layout_len != 1){
             int seg_count = 1;
             int seg_idx = 0;
             layout[seg_idx].disp = filetype_disp;
-            for(int i = 1; i < filetype.typemap_len; i++){
-                int new_filetype_disp = filetype.typemap[i].disp;
+            // for(int i = 1; i < filetype.typemap_len; i++){
+            for(int i = 1; i < filetype.viewlen(); i++){
+                // int new_filetype_disp = filetype.typemap[i].disp;
+                int new_filetype_disp = filetype.__view_pos_to_file_pos(i);
                 if(filetype_disp + etype.size() != new_filetype_disp){
                     layout[seg_idx].count = seg_count;
                     seg_count = 1;
@@ -135,7 +141,8 @@ struct MPI_File_View{
             // }
         }else{
             layout[0].disp = filetype_disp;
-            layout[0].count = filetype.typemap_len;
+            // layout[0].count = filetype.typemap_len;
+            layout[0].count = filetype.viewlen();
         }
     }
     __device__ MPI_File_View(){}
